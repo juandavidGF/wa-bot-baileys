@@ -8,6 +8,12 @@ const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER;
 const JD_NUMBER = process.env.JD_NUMBER;
 const respondedToMessages = new Set();
 
+interface SenderFlows {
+  [key: string]: string; // Key is a string, value is a string
+}
+
+const senderFlows: SenderFlows = {};
+
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info')
   logger.level = 'trace'
@@ -38,33 +44,56 @@ async function connectToWhatsApp() {
       console.log("opened connection");
     }
   });
-  // sock.ev.on("messages.upsert", ({ message }) => {
-  //   console.log("got messages", m);
-  //   console.log(JSON.stringify(m, undefined, 2));
-
-  //   console.log(m[0].message);
-  // });
   sock.ev.on("messages.upsert", async (m) => {
     const receivedMessage = m.messages[0];
     const senderJid = receivedMessage.key.remoteJid;
+    const messageConversation = receivedMessage.message?.conversation
+    const messageExtended = receivedMessage.message?.extendedTextMessage?.text
 
-    if (senderJid === `${JD_NUMBER}@s.whatsapp.net` && !respondedToMessages.has(senderJid)) {
+    if (typeof senderJid !== 'string') return
+
+    if (!senderFlows[senderJid]) {
+      senderFlows[senderJid] = 'initial';
+    }
+    // console.log("Received message from", senderJid);
+    // console.log(JSON.stringify(receivedMessage))
+    
+
+    // if ((senderJid === `${JD_NUMBER}@s.whatsapp.net`) &&
+    if(!respondedToMessages.has(senderJid) && 
+    messageConversation === '/brandx' &&
+    senderFlows[senderJid] === 'initial') {
       // console.log(JSON.stringify(m, undefined, 2));
-      console.log("Received message from", senderJid);
 
       respondedToMessages.add(senderJid);
 
-      await sock.sendMessage(senderJid, {
-        text: "Hello there!",
-      });
+      setTimeout(() => {
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: "Describe your product, company or idea",
+        });
+        senderFlows[senderJid] = 'product';
+      }, 2_500)
 
-      await delay(3_000);
-      // Remove sender from respondedToMessages set to allow responses again
-      respondedToMessages.delete(senderJid);
+      setTimeout(() => {
+        respondedToMessages.delete(senderJid);
+      }, 3_500)
     }
+    if(!respondedToMessages.has(senderJid) &&
+    senderFlows[senderJid] === 'product') {
+
+      setTimeout(() => {
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: "ok, recived",
+        });
+        senderFlows[senderJid] = 'product';
+      }, 2_500)
+
+      setTimeout(() => {
+        respondedToMessages.delete(senderJid);
+      }, 3_500)
+    }
+    
   });
 }
 
-// send a simple text!
-// run in main file
 connectToWhatsApp();
