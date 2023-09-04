@@ -85,7 +85,7 @@ async function connectToWhatsApp() {
         if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
           text: "ok, recived",
         });
-        senderFlows[senderJid] = 'product';
+        senderFlows[senderJid] = 'initial';
       }, 2_500)
 
       setTimeout(() => {
