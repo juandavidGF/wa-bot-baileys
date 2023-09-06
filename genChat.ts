@@ -1,9 +1,7 @@
 import OpenAI from 'openai';
 import isDomainAvailable from './utils/isDomainAvailable';
 
-
 require('dotenv').config();
-
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -16,8 +14,8 @@ type RequestPayload = {
 
 export async function genChat(payload: RequestPayload) {
 
-  // const response = await getOneByOne(payload)
-	const response = mockTextAssets()
+  const response = await getOneByOne(payload)
+	// const response = mockTextAssets()
   // getByFunctionCalling(payload)
   return response
 }

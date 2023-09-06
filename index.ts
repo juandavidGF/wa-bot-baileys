@@ -23,6 +23,15 @@ type RequestPayload = {
   prompt: any;
 };
 
+type textAssets = {
+  companyName: string | null,
+  domain: string | undefined,
+  slogan: string | null,
+  tagline: string | null,
+  logoPrompt: string | null,
+  whyLogo: string | null
+}
+
 const senderFlows: SenderFlows = {};
 
 async function connectToWhatsApp() {
@@ -99,7 +108,7 @@ async function connectToWhatsApp() {
       if(!BASE_GEN) return
       
       setTimeout(async () => {
-        let textAssets = {};
+        let textAssets: textAssets;
         // call generate brand assets,
           // Llamar función que genera texto
           const payload: RequestPayload = {
@@ -128,13 +137,17 @@ async function connectToWhatsApp() {
 
         for (const [key, value] of Object.entries(textAssets)) {
           console.log(`${key}: ${value}`);
-          if(key !== "logoPrompt") await sock.sendMessage(senderJid, {
+          if(key !== "logoPrompt" && key !== "whyLogo") await sock.sendMessage(senderJid, {
             text: `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`,
           });
           else {
             if(typeof value === 'string') logoPrompt = value
           }
         }
+
+        sock.sendMessage(senderJid, {
+          text: "generating logos ...",
+        });
         
         const logos = await getLogo(logoPrompt)
 
@@ -146,6 +159,10 @@ async function connectToWhatsApp() {
             }
           })
         }
+
+        if(typeof textAssets.whyLogo === 'string') sock.sendMessage(senderJid, {
+          text: "Logo Composition: " + textAssets.whyLogo,
+        });
 
         setTimeout(() => {
           respondedToMessages.delete(senderJid);
