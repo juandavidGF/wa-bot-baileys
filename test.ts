@@ -1,9 +1,8 @@
 import OpenAI from 'openai';
 import isDomainAvailable from './utils/isDomainAvailable';
-
+import clientPromise from './db/mongodb';
 
 require('dotenv').config();
-
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -40,5 +39,27 @@ async function printItems() {
   
 }
 
+async function findPhoneDB() {
+  if (!process.env.MONGO_DB) {
+    throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
+  }
+	if (!process.env.MONGO_COLLECTION) {
+    throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
+  }
+
+  const mongoClient = await clientPromise;
+  const db = mongoClient.db(process.env.MONGO_DB);
+  const collection = db.collection(process.env.MONGO_COLLECTION);
+
+  const JD_NUMBER = process.env.JD_NUMBER
+  const senderJid = `${JD_NUMBER}@s.whatsapp.net`
+  const phone = `+${senderJid.split('@')[0]}`;
+
+  const results = await collection.find({ phone: phone }).toArray()
+  console.log(results)
+  mongoClient.close();
+}
+
 // getDomain()
-printItems()
+// printItems()
+findPhoneDB()

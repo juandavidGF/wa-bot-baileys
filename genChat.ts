@@ -104,7 +104,7 @@ async function  getOneByOne({chain, prompt}: RequestPayload) {
 
   return {
     companyName,
-    domain,
+    domains: domain,
     slogan,
     tagline,
     logoPrompt,

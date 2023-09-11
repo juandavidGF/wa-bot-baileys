@@ -6,6 +6,9 @@ import axios from 'axios'
 
 import { genChat } from './genChat'
 import getLogo from './getLogo'
+import getMessage from './db/getMessages'
+import saveGenerations from './db/saveGenerations'
+import { DesighBrief } from "./models/logoapp";
 
 require('dotenv').config();
 
@@ -35,7 +38,7 @@ type textAssets = {
 const senderFlows: SenderFlows = {};
 
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juanGranados')
+  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot')
   logger.level = 'trace'
   
   const sock = makeWASocket({
@@ -77,10 +80,13 @@ async function connectToWhatsApp() {
       senderFlows[senderJid] = 'initial';
     }
     
-    if (senderJid === `${JUAND4BOT_NUMBER}@s.whatsapp.net`) {
+    if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
       console.log(JSON.stringify(receivedMessage))
       console.log(senderJid, 'mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
     }
+    if(messageUser === '/getMgs' &&
+    senderJid === `${JD_NUMBER}@s.whatsapp.net`
+    ) getMessage();
     if(!respondedToMessages.has(senderJid) &&
     messageUser === '/brandx' &&
     senderFlows[senderJid] === 'initial') {
@@ -106,31 +112,32 @@ async function connectToWhatsApp() {
       });
       senderFlows[senderJid] = 'generating';
       if(!BASE_GEN) return
+
+      const product = messageUser
       
       setTimeout(async () => {
-        let textAssets: textAssets;
-        // call generate brand assets,
-          // Llamar función que genera texto
-          const payload: RequestPayload = {
-            chain: "design_brief",
-            prompt: {
-              product: messageUser
-            }
-          };
-          try {
-            textAssets = await genChat(payload)
-            console.log('index#textAssets (response)', textAssets)
-          } catch (error) {
-            //Debo hacer que se genere error, y si eso pasa entonces, volverla a llamar máximo 3 veces ...
-            console.log('error -> ')
-            console.error(error)
-            if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
-              text: "error",
-            });
-            return
+        let textAssets: DesighBrief;
+
+        const payload: RequestPayload = {
+          chain: "design_brief",
+          prompt: {
+            product: product
           }
-          console.log('index#textAssets -> ', textAssets)
-          // call generate logo ...
+        };
+        try {
+          textAssets = await genChat(payload)
+          console.log('index#textAssets (response)', textAssets)
+        } catch (error) {
+          //Debo hacer que se genere error, y si eso pasa entonces, volverla a llamar máximo 3 veces ...
+          console.log('error -> ')
+          console.error(error)
+          if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+            text: "error",
+          });
+          return
+        }
+        console.log('index#textAssets -> ', textAssets)
+        // call generate logo ...
         //Respond
 
         let logoPrompt = '';
@@ -163,6 +170,13 @@ async function connectToWhatsApp() {
         if(typeof textAssets.whyLogo === 'string') sock.sendMessage(senderJid, {
           text: "Logo Composition: " + textAssets.whyLogo,
         });
+
+        
+        const phone = senderJid.split('@')[0];
+        if(typeof product !== 'string') return
+
+        const saveResult = await saveGenerations(textAssets, logos, product, phone);
+        console.log('save: ', saveResult);
 
         setTimeout(() => {
           respondedToMessages.delete(senderJid);

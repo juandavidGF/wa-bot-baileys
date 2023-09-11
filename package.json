@@ -1,7 +1,9 @@
 {
   "dependencies": {
     "@whiskeysockets/baileys": "^6.4.0",
+    "cloudinary": "^1.40.0",
     "dotenv": "^16.3.1",
+    "mongodb": "^6.0.0",
     "openai": "^4.4.0",
     "pino": "^8.15.0",
     "qrcode-terminal": "^0.12.0",
