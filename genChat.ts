@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import isDomainAvailable from './utils/isDomainAvailable';
+import { ChatCompletionMessageParam } from 'openai/resources/chat';
+import clientPromise from './db/mongodb';
 
 require('dotenv').config();
 
@@ -7,17 +9,97 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+interface MessageDB {
+	role: 'system' | 'assistant' | 'user';
+	date: number;
+	sequence?: number;
+	message: string;
+}
+
 type RequestPayload = {
   chain: string;
   prompt: any;
 };
 
-export async function genChat(payload: RequestPayload) {
+interface Message {
+  role: 'system' | 'assistant' | 'user';
+  content: string;
+}
 
-  const response = await getOneByOne(payload)
+type RequestPayloadChat = {
+  chain: string;
+  messages: Message[];
+};
+
+export async function genChat(payload: any, phone: string) {
+	let response: any = ''
+	switch (payload.chain) {
+		case "logoChain":
+			response = await getOneByOne(payload);
+			break;
+		case "mvpRecluimentClient":
+			response = await getMVPRecluiment(payload.messages, phone)
+			break;
+		default:
+			throw new Error('chain not supported');
+	}
+
 	// const response = mockTextAssets()
   // getByFunctionCalling(payload)
   return response
+}
+
+async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: string) {
+	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
+	console.log('getMVPRecluiment#messagess: ', messages);
+	let lastMessage = messages[messages.length - 1]?.content;
+	if(!lastMessage) throw Error('err last Message, !LastMesssage');
+	await saveConversation('user', lastMessage, phone);
+	
+	const gptResponse = (await openai.chat.completions.create({
+    messages: messages,
+    model: 'gpt-3.5-turbo',
+  })).choices[0].message.content;
+	if(gptResponse == null) {
+		throw Error('We didnt get a response getMVPRecluiment');
+	}
+
+	await saveConversation('assistant', gptResponse, phone);
+	return gptResponse;
+}
+
+async function saveConversation(role: 'user' | 'assistant' | 'system', message: string, phone: string) {
+	if (!process.env.MONGO_DB_CAI) {
+		throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
+	}
+	if (!process.env.MONGO_COLLECTION_CAI) {
+		throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
+	}
+
+	const mongoClient = await clientPromise;
+	const db = mongoClient.db(process.env.MONGO_DB_CAI);
+	const collection = db.collection(process.env.MONGO_COLLECTION_CAI);
+
+	// debo encontrar o crear el documento en la DB, y guardar la respuesta, de hecho puedo guardar las dos, diferente tiempo.
+	const messageData: MessageDB = {
+		date: Date.now(),
+		role: role,
+		message: message
+	}
+	try {
+		await collection.updateOne(
+			{ phone: phone },
+			{
+				$push: {
+					chat: messageData
+				}
+			},
+			{ upsert: true}
+		)
+	} catch (error: any) {
+		console.error(error)
+		throw Error(`saveConversation error ${error.message}`)
+	}
 }
 
 function mockTextAssets() {
