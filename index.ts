@@ -17,7 +17,7 @@ require('dotenv').config();
 const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER || '';
 const JD_NUMBER = process.env.JD_NUMBER;
 // const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT 
-const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
+const MVP_RECLUIMENT_CLIENT = JD_NUMBER;
 const respondedToMessages = new Set();
 const BASE_GEN = process.env.BASE_GEN;
 
