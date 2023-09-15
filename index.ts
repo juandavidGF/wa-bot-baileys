@@ -80,37 +80,6 @@ async function connectToWhatsApp() {
   // this will be called as soon as the credentials are updated
   sock.ev.on("creds.update", saveCreds);
 
-  setTimeout(async () => {
-    for (const key in tasks) {
-      if (tasks.hasOwnProperty(key)) {
-        const task = tasks[key];
-        console.log(key, task);
-        if(task.enabled) {
-          if (!senderFlows[key]) {
-            senderFlows[key] = 'initial';
-          }
-          respondedToMessages.add(key);
-
-          let firstMessage = `Hola, soy juand4bot, el agente de IA, de Juan David, te escribo porque vi tu publicación es Startup Colombia acerca de un MVP de recruiment que necesitas, te cuento que mi creador, tiene experiencia creando MVPs y trabajó en torre. Me gustaría hacerte unas preguntas para conocer tus requerimientos para luego si hay sinergias, agendar una videollamada con Juan David, te parece?`;
-
-          senderFlows[key] = 'generating';
-          await sock.sendMessage(key as string, {
-            text: firstMessage,
-          });
-          
-          if (!mHistory[key]) {
-            mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage}];
-          }
-          await delay(2_500);
-          respondedToMessages.delete(key);
-          senderFlows[key] = 'initial';
-        }
-        // 'key' is the property key (e.g., `${JD_NUMBER}@s.whatsapp.net`)
-        // 'task' is the corresponding object (e.g., { phone: ..., name: ..., enabled: ... })
-      }
-    }
-  }, 5_000)
-
 
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update;
@@ -131,6 +100,36 @@ async function connectToWhatsApp() {
     } else if (connection === "open") {
       console.log("opened connection");
     }
+    setTimeout(async () => {
+      for (const key in tasks) {
+        if (tasks.hasOwnProperty(key)) {
+          const task = tasks[key];
+          console.log(key, task);
+          if(task.enabled) {
+            if (!senderFlows[key]) {
+              senderFlows[key] = 'initial';
+            }
+            respondedToMessages.add(key);
+  
+            let firstMessage = `Hola, soy juand4bot, el agente de IA, de Juan David, te escribo porque vi tu publicación es Startup Colombia acerca de un MVP de recruiment que necesitas, te cuento que mi creador, tiene experiencia creando MVPs y trabajó en torre. Me gustaría hacerte unas preguntas para conocer tus requerimientos para luego si hay sinergias, agendar una videollamada con Juan David, te parece?`;
+  
+            senderFlows[key] = 'generating';
+            await sock.sendMessage(key as string, {
+              text: firstMessage,
+            });
+            
+            if (!mHistory[key]) {
+              mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage}];
+            }
+            await delay(2_500);
+            respondedToMessages.delete(key);
+            senderFlows[key] = 'initial';
+          }
+          // 'key' is the property key (e.g., `${JD_NUMBER}@s.whatsapp.net`)
+          // 'task' is the corresponding object (e.g., { phone: ..., name: ..., enabled: ... })
+        }
+      }
+    }, 5_000)
   });
   sock.ev.on("messages.upsert", async (m) => {
     const receivedMessage = m.messages[0];
