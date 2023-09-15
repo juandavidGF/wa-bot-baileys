@@ -3,7 +3,7 @@ import { Boom } from "@hapi/boom";
 import logger from "./utils/logger";
 import { delay } from "./utils/delay";
 import axios from 'axios';
-import { mvpRecluimentPrompt } from "./lib/Prompts";
+import { firstMessage, mvpRecluimentPrompt } from "./lib/Prompts";
 
 import { genChat } from './genChat'
 import getLogo from './getLogo'
@@ -93,15 +93,13 @@ async function connectToWhatsApp() {
             }
             respondedToMessages.add(key);
   
-            let firstMessage = `Hola, soy juand4bot, el agente de IA, de Juan David, te escribo porque vi tu publicación es Startup Colombia acerca de un MVP de recruiment que necesitas, te cuento que mi creador, tiene experiencia creando MVPs y trabajó en torre. Me gustaría hacerte unas preguntas para conocer tus requerimientos para luego si hay sinergias, agendar una videollamada con Juan David, te parece?`;
-  
             senderFlows[key] = 'generating';
             await sock.sendMessage(key as string, {
-              text: firstMessage,
+              text: firstMessage().content as string,
             });
             
             if (!mHistory[key]) {
-              mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage}];
+              mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage().content as string}];
             }
             await delay(2_500);
             respondedToMessages.delete(key);
@@ -133,7 +131,7 @@ async function connectToWhatsApp() {
       }
     } else if (connection === "open") {
       console.log("opened connection");
-      jobTasks();
+      // jobTasks();
     }
   });
   sock.ev.on("messages.upsert", async (m) => {
@@ -143,7 +141,7 @@ async function connectToWhatsApp() {
     const messageExtended = receivedMessage.message?.extendedTextMessage?.text
     const messageUser = !!messageConversation ? messageConversation : messageExtended;
 
-    if (typeof senderJid !== 'string') return
+    if (typeof senderJid !== 'string') return;
 
     if (!senderFlows[senderJid]) {
       senderFlows[senderJid] = 'initial';
@@ -162,10 +160,11 @@ async function connectToWhatsApp() {
       // if(messageUser !== 'string') throw Error(`${messageUser} isn't a string`);
 
       if (!mHistory[senderJid]) {
-        mHistory[senderJid] = [mvpRecluimentPrompt()];
+        mHistory[senderJid] = [mvpRecluimentPrompt(), firstMessage()];
       }
       mHistory[senderJid].push({role: 'user', content: messageUser as string});
       console.log(mHistory, mHistory[senderJid].length);
+      if (messageUser?.includes("#DONE#")) return;
       let payload: RequestPayloadChat = {
         chain: 'mvpRecluimentClient',
         messages: mHistory[senderJid],
@@ -173,7 +172,7 @@ async function connectToWhatsApp() {
 
       if(senderFlows[senderJid] === 'initial') {
         senderFlows[senderJid] = 'generating';
-        let gptResponse = await genChat(payload, JD_NUMBER as string);
+        let gptResponse = await genChat(payload, MVP_RECLUIMENT_CLIENT as string);
         mHistory[senderJid].push({role: 'assistant', content: gptResponse});
         if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
           text: gptResponse,
@@ -186,6 +185,11 @@ async function connectToWhatsApp() {
     }
     
     if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
+      console.log('reveived Message from: ', senderJid);
+      console.log(JSON.stringify(receivedMessage));
+      console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+    }
+    if (senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`) {
       console.log('reveived Message from: ', senderJid);
       console.log(JSON.stringify(receivedMessage));
       console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);

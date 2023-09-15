@@ -43,3 +43,11 @@ export function mvpRecluimentPrompt() {
   }
   return message;
 }
+
+export function firstMessage() {
+  const message: ChatCompletionMessageParam = {
+    role: 'assistant',
+    content: `Hola, soy juand4bot, el agente de IA, de Juan David, te escribo porque vi tu publicación es Startup Colombia acerca de un MVP de recruiment que necesitas, te cuento que mi creador, tiene experiencia creando MVPs y trabajó en torre. Me gustaría hacerte unas preguntas para conocer tus requerimientos para luego si hay sinergias, agendar una videollamada con Juan David, te parece?`
+  }
+  return message
+}
