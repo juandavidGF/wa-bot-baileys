@@ -38,7 +38,7 @@ export async function genChat(payload: any, phone: string) {
 			response = await getOneByOne(payload);
 			break;
 		case "mvpRecluimentClient":
-			response = await getMVPRecluiment(payload.messages, phone)
+			response = await getMVPRecluiment(payload.messages, phone);
 			break;
 		default:
 			throw new Error('chain not supported');
@@ -92,7 +92,10 @@ async function saveConversation(role: 'user' | 'assistant' | 'system', message: 
 			{
 				$push: {
 					chat: messageData
-				}
+				},
+				$setOnInsert: {
+					phone: phone // This sets the 'phone' field when a new document is created
+				},
 			},
 			{ upsert: true}
 		)

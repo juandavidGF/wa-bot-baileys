@@ -11,6 +11,9 @@ import getMessage from './db/getMessages'
 import saveGenerations from './db/saveGenerations'
 import { DesighBrief } from "./models/logoapp";
 import { ChatCompletionMessageParam } from "openai/resources/chat";
+import { Task, Tasks } from './models/logoapp'
+
+import getTasks from './db/getTasks'
 
 require('dotenv').config();
 
@@ -30,25 +33,7 @@ const senderFlows: SenderFlows = {};
 interface Messages {
   [key: string]: ChatCompletionMessageParam[]; // Key is a string, value is an array of Message objects
 }
-
 const mHistory: Messages = {};
-
-interface Task {
-  name: 'mvpRecluimentFirstMessage' | 'none';
-  phone: string;
-  enabled: boolean;
-}
-
-interface Tasks {
-  [key: string]: Task; // Key is a string, value is an array of Message objects
-}
-const tasks: Tasks = {}
-
-tasks[`${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`] = {
-  phone: MVP_RECLUIMENT_CLIENT as string,
-  name: 'mvpRecluimentFirstMessage',
-  enabled: true,
-}
 
 type RequestPayload = {
   chain: string;
@@ -80,38 +65,47 @@ async function connectToWhatsApp() {
   // this will be called as soon as the credentials are updated
   sock.ev.on("creds.update", saveCreds);
 
+  //When init read the db, for enable tasks, review the date, and call each x time the function to review if the date is on
 
-  function jobTasks () {
-    setTimeout(async () => {
-      for (const key in tasks) {
-        if (tasks.hasOwnProperty(key)) {
-          const task = tasks[key];
-          console.log(key, task);
-          if(task.enabled) {
-            if (!senderFlows[key]) {
-              senderFlows[key] = 'initial';
-            }
-            respondedToMessages.add(key);
-  
-            senderFlows[key] = 'generating';
-            await sock.sendMessage(key as string, {
-              text: firstMessage().content as string,
-            });
-            
-            if (!mHistory[key]) {
-              mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage().content as string}];
-            }
-            await delay(2_500);
-            respondedToMessages.delete(key);
+  const interval = 10*60*1_000 //10m
+
+  jobTasks();
+
+  setInterval(() => {
+    jobTasks()
+  }, interval);
+
+  async function jobTasks () {
+    const tasks = await getTasks();
+    if(!tasks) return;
+
+    for (const key in tasks) {
+      if (tasks.hasOwnProperty(key)) {
+        const task = tasks[key];
+        console.log(key, task);
+        if(!task.done) {
+          if (!senderFlows[key]) {
             senderFlows[key] = 'initial';
           }
-          // 'key' is the property key (e.g., `${JD_NUMBER}@s.whatsapp.net`)
-          // 'task' is the corresponding object (e.g., { phone: ..., name: ..., enabled: ... })
-        }
-      }
-    }, 5_000)
-  }
+          respondedToMessages.add(key);
 
+          senderFlows[key] = 'generating';
+          await sock.sendMessage(key as string, {
+            text: firstMessage().content as string,
+          });
+          
+          if (!mHistory[key]) {
+            mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage().content as string}];
+          }
+          await delay(2_500);
+          respondedToMessages.delete(key);
+          senderFlows[key] = 'initial';
+        }
+        // 'key' is the property key (e.g., `${JD_NUMBER}@s.whatsapp.net`)
+        // 'task' is the corresponding object (e.g., { phone: ..., name: ..., enabled: ... })
+      }
+    }
+  }
 
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect } = update;
