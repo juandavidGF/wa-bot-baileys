@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import isDomainAvailable from './utils/isDomainAvailable';
 import clientPromise from './db/mongodb';
+import { getTasks } from './db/Tasks';
 
 require('dotenv').config();
 
@@ -62,4 +63,6 @@ async function findPhoneDB() {
 
 // getDomain()
 // printItems()
-findPhoneDB()
+// findPhoneDB()
+
+getTasks();

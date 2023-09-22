@@ -2,25 +2,23 @@ import makeWASocket, { DisconnectReason, makeCacheableSignalKeyStore, useMultiFi
 import { Boom } from "@hapi/boom";
 import logger from "./utils/logger";
 import { delay } from "./utils/delay";
-import axios from 'axios';
 import { firstMessage, mvpRecluimentPrompt } from "./lib/Prompts";
 
-import { genChat } from './genChat'
-import getLogo from './getLogo'
-import getMessage from './db/getMessages'
-import saveGenerations from './db/saveGenerations'
+import { genChat, saveConversation } from './genChat';
+import getLogo from './getLogo';
+import getMessage from './db/getMessages';
+import saveGenerations from './db/saveGenerations';
 import { DesighBrief } from "./models/logoapp";
 import { ChatCompletionMessageParam } from "openai/resources/chat";
-import { Task, Tasks } from './models/logoapp'
 
-import getTasks from './db/getTasks'
+import { getTasks, updateTask } from './db/Tasks'
 
 require('dotenv').config();
 
-const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER || '';
+const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER;
 const JD_NUMBER = process.env.JD_NUMBER;
-const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
-// const MVP_RECLUIMENT_CLIENT = JD_NUMBER;
+// const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
+const MVP_RECLUIMENT_CLIENT = JD_NUMBER;
 const respondedToMessages = new Set();
 const BASE_GEN = process.env.BASE_GEN;
 
@@ -55,54 +53,61 @@ type textAssets = {
 }
 
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot')
-  logger.level = 'trace'
+  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot');
+  logger.level = 'trace';
   
   const sock = makeWASocket({
     printQRInTerminal: true,
     auth: state,
   });
-  // this will be called as soon as the credentials are updated
+  
   sock.ev.on("creds.update", saveCreds);
 
-  //When init read the db, for enable tasks, review the date, and call each x time the function to review if the date is on
-
-  const interval = 10*60*1_000 //10m
+  const interval = 3*60*1_000 //10m
 
   jobTasks();
 
   setInterval(() => {
-    jobTasks()
+    jobTasks();
   }, interval);
+
+  // Guardar cuando fue completado la task, luego puedo ver en que punto (como por ejemplo luego del #DONE#).
+  // No mandó el #Done#, así que debo revisar que pasó, y como mejorarlo.
+  // Quizá las campañas deberían crearse independientemente, para permitir una a muchas ... :).
+  // Debo revisar según el date, si es default mandarlo, si no a pasado aún esperar :).
 
   async function jobTasks () {
     const tasks = await getTasks();
-    if(!tasks) return;
+    console.log('jobTasks: ', !!tasks, tasks.length, tasks);
+    // por alguna razón luego del firstMessage, no responde nada ...
 
-    for (const key in tasks) {
-      if (tasks.hasOwnProperty(key)) {
-        const task = tasks[key];
-        console.log(key, task);
-        if(!task.done) {
-          if (!senderFlows[key]) {
-            senderFlows[key] = 'initial';
-          }
-          respondedToMessages.add(key);
-
-          senderFlows[key] = 'generating';
-          await sock.sendMessage(key as string, {
-            text: firstMessage().content as string,
-          });
-          
-          if (!mHistory[key]) {
-            mHistory[key] = [mvpRecluimentPrompt(), {role: 'assistant', content: firstMessage().content as string}];
-          }
-          await delay(2_500);
-          respondedToMessages.delete(key);
-          senderFlows[key] = 'initial';
+    if (!!tasks && tasks.length > 0) {
+      for(const task of tasks) {
+        if(!task?.phone) return;
+        console.log('onjobTask for..of');
+        const firstTask = task;
+        const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
+        if (!senderFlows[senderJidLocal]) {
+          senderFlows[senderJidLocal] = 'initial';
         }
-        // 'key' is the property key (e.g., `${JD_NUMBER}@s.whatsapp.net`)
-        // 'task' is the corresponding object (e.g., { phone: ..., name: ..., enabled: ... })
+        respondedToMessages.add(senderJidLocal);
+        senderFlows[senderJidLocal] = 'generating';
+        const firstMessageR = task.firstMessage as string;
+        await sock.sendMessage(senderJidLocal, {
+          text: firstMessageR,
+        });
+        if (!mHistory[senderJidLocal]) {
+          mHistory[senderJidLocal] = [
+            {role: 'system', content: task.prompt as string},
+            {role: 'assistant', content: task.firstMessage as string}
+          ];
+        }
+        saveConversation('system', task.prompt as string, task.phone);
+        saveConversation('assistant', task.firstMessage as string, task.phone);
+        await updateTask(task, task.phone);
+        await delay(1_500);
+        senderFlows[senderJidLocal] = 'initial';
+        respondedToMessages.delete(senderJidLocal);
       }
     }
   }
@@ -135,23 +140,30 @@ async function connectToWhatsApp() {
     const messageExtended = receivedMessage.message?.extendedTextMessage?.text
     const messageUser = !!messageConversation ? messageConversation : messageExtended;
 
-    if (typeof senderJid !== 'string') return;
+    if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
 
     if (!senderFlows[senderJid]) {
       senderFlows[senderJid] = 'initial';
     }
 
+    // if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
+    //   console.log('reveived Message from: ', senderJid);
+    //   console.log(JSON.stringify(receivedMessage));
+    //   console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+    // }
+    if (senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`) {
+      console.log('!respondedToMessages.has(senderJid)', !respondedToMessages.has(senderJid));
+      console.log('reveived Message from: ', senderJid);
+      console.log(JSON.stringify(receivedMessage));
+      console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+    }
+
     if(!respondedToMessages.has(senderJid) &&
     senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`
     ) {
+      console.log('flag1');
       respondedToMessages.add(senderJid);
-      // Debo mandar el primer mensaje (queu)
-      // Debo inicializar el historial, con el prompt,
-      // debo recibir mensaje,
-      // mandarlo al flujo de chatGPT,
-      // console.log(typeof JD_NUMBER);
-      // if(JD_NUMBER !== 'string') throw Error(`${JD_NUMBER} isn't a string`);
-      // if(messageUser !== 'string') throw Error(`${messageUser} isn't a string`);
+      // Esta respondiendo doble?, por qué volvió a enviarlo?
 
       if (!mHistory[senderJid]) {
         mHistory[senderJid] = [mvpRecluimentPrompt(), firstMessage()];
@@ -164,30 +176,29 @@ async function connectToWhatsApp() {
         messages: mHistory[senderJid],
       };
 
-      if(senderFlows[senderJid] === 'initial') {
+      console.log('flag2');
+
+      if(senderFlows[senderJid] === 'initial' || senderFlows[senderJid] === 'userReseach') {
+        console.log('flag3');
         senderFlows[senderJid] = 'generating';
-        let gptResponse = await genChat(payload, MVP_RECLUIMENT_CLIENT as string);
+        let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
         mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+        console.log('flag4');
         if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
           text: gptResponse,
         });
+        console.log('flag5');
         await delay(2_500);
         respondedToMessages.delete(senderJid);
-        if (gptResponse.includes("#DONE#")) return;
-        senderFlows[senderJid] = 'initial';
+        if (gptResponse.includes("#DONE#")) {
+          senderFlows[senderJid] = 'initial';
+          return;
+        }
+        senderFlows[senderJid] = 'userReseach';
+        console.log('flag6');
       }
     }
     
-    if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
-      console.log('reveived Message from: ', senderJid);
-      console.log(JSON.stringify(receivedMessage));
-      console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
-    }
-    if (senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`) {
-      console.log('reveived Message from: ', senderJid);
-      console.log(JSON.stringify(receivedMessage));
-      console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
-    }
     if(messageUser === '/getMgs' &&
     senderJid === `${JD_NUMBER}@s.whatsapp.net`
     ) getMessage();
@@ -216,7 +227,7 @@ async function connectToWhatsApp() {
       });
       senderFlows[senderJid] = 'generating';
       if(!BASE_GEN) return;
-      if(JD_NUMBER !== 'string') throw Error('JD_NUMBER is no string');
+      // if(JD_NUMBER !== 'string') throw Error('JD_NUMBER is no string');
 
       const product = messageUser
       
@@ -224,13 +235,13 @@ async function connectToWhatsApp() {
         let textAssets: DesighBrief;
 
         const payload: RequestPayload = {
-          chain: "design_brief",
+          chain: "logoChain",
           prompt: {
             product: product
           }
         };
         try {
-          textAssets = await genChat(payload, JD_NUMBER)
+          textAssets = await genChat(payload, Number(JD_NUMBER));
           console.log('index#textAssets (response)', textAssets)
         } catch (error) {
           //Debo hacer que se genere error, y si eso pasa entonces, volverla a llamar máximo 3 veces ...

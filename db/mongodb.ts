@@ -2,7 +2,7 @@ import { MongoClient } from 'mongodb';
 
 require('dotenv').config();
 
-const uri = process.env.MONGODB_URI_VERCEL_CAI;
+const uri = process.env.MONGODB_URI_VERCEL_J4APP;
 
 if (!uri) {
   throw new Error('Invalid environment variable: "MONGODB_URI"');

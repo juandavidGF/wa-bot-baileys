@@ -45,13 +45,3 @@ export interface UserGenModel {
 	createdDate?: number;
 	generation: Generation[];
 }
-
-export interface Task {
-	task: string;
-	done: boolean;
-}
-
-export interface Tasks {
-	phone: string;
-	tasks: Task[]
-}

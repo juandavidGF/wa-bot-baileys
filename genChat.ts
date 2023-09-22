@@ -10,10 +10,12 @@ const openai = new OpenAI({
 });
 
 interface MessageDB {
-	role: 'system' | 'assistant' | 'user';
-	date: number;
-	sequence?: number;
-	message: string;
+	role: 'system' | 'assistant' | 'user',
+	date: number,
+	sequence?: number,
+	message: string,
+	env: 'dev' | 'prod',
+	campaign?: string,
 }
 
 type RequestPayload = {
@@ -31,11 +33,11 @@ type RequestPayloadChat = {
   messages: Message[];
 };
 
-export async function genChat(payload: any, phone: string) {
+export async function genChat(payload: any, phone: number) {
 	let response: any = ''
 	switch (payload.chain) {
 		case "logoChain":
-			response = await getOneByOne(payload);
+			response = await getOneByOne(payload, phone);
 			break;
 		case "mvpRecluimentClient":
 			response = await getMVPRecluiment(payload.messages, phone);
@@ -49,7 +51,7 @@ export async function genChat(payload: any, phone: string) {
   return response
 }
 
-async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: string) {
+async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: number) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
 	console.log('getMVPRecluiment#messagess: ', messages);
 	let lastMessage = messages[messages.length - 1]?.content;
@@ -68,27 +70,27 @@ async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: 
 	return gptResponse;
 }
 
-async function saveConversation(role: 'user' | 'assistant' | 'system', message: string, phone: string) {
-	if (!process.env.MONGO_DB_CAI) {
-		throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
+export async function saveConversation(role: 'user' | 'assistant' | 'system', message: string, phone: number) {
+	if (!process.env.MONGO_DB_CMP) {
+		throw new Error('Invalid environment variable: "MONGO_DB_CMP"');
 	}
 	if (!process.env.MONGO_COLLECTION_CAI) {
-		throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
+		throw new Error('Invalid environment variable: "MONGO_COLLECTION_TASKS"');
 	}
 
 	const mongoClient = await clientPromise;
-	const db = mongoClient.db(process.env.MONGO_DB_CAI);
+	const db = mongoClient.db(process.env.MONGO_DB_CMP);
 	const collection = db.collection(process.env.MONGO_COLLECTION_CAI);
 
-	// debo encontrar o crear el documento en la DB, y guardar la respuesta, de hecho puedo guardar las dos, diferente tiempo.
 	const messageData: MessageDB = {
 		date: Date.now(),
 		role: role,
-		message: message
+		message: message,
+		env: process.env.ENV_J4 as "dev" || "prod",
 	}
 	try {
 		await collection.updateOne(
-			{ phone: phone },
+			{ pohne: phone },
 			{
 				$push: {
 					chat: messageData
@@ -116,7 +118,7 @@ function mockTextAssets() {
 	}
 }
 
-async function  getOneByOne({chain, prompt}: RequestPayload) {
+async function  getOneByOne({chain, prompt}: RequestPayload, phone: number) {
 
   const companyName = (await openai.chat.completions.create({
     messages: [{ role: 'user', content: `What is a good name for a company that makes: ${prompt.product}?, just responde with the company name and not add more text` }],
