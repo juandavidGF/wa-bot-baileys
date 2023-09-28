@@ -1,4 +1,8 @@
-import makeWASocket, { DisconnectReason, makeCacheableSignalKeyStore, useMultiFileAuthState, MessageType } from "@whiskeysockets/baileys";
+import makeWASocket, { 
+  DisconnectReason,
+  makeCacheableSignalKeyStore,
+  useMultiFileAuthState,
+  MessageType } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import logger from "./utils/logger";
 import { delay } from "./utils/delay";
@@ -11,7 +15,8 @@ import saveGenerations from './db/saveGenerations';
 import { DesighBrief } from "./models/logoapp";
 import { ChatCompletionMessageParam } from "openai/resources/chat";
 
-import { getTasks, updateTask } from './db/Tasks'
+import { getTasks, updateTask } from './db/tasks';
+import { Campaign } from "./models/tasks";
 
 require('dotenv').config();
 
@@ -22,9 +27,23 @@ const MVP_RECLUIMENT_CLIENT = JD_NUMBER;
 const respondedToMessages = new Set();
 const BASE_GEN = process.env.BASE_GEN;
 
-interface SenderFlows {
-  [key: string]: string; // Key is a string, value is a string
+// Quizá también debería agregar una para la app en la que esta, así le doy una prioridad.
+interface SenderFlowState {
+  flow: string;
+  state: string;
+  source?: string;
 }
+
+interface SenderFlows {
+  [senderJid: string]: SenderFlowState;
+}
+
+
+interface ActiveCodes {
+  [key: string]: Campaign
+}
+
+const activeCodes: ActiveCodes = {};
 
 const senderFlows: SenderFlows = {};
 
@@ -53,6 +72,7 @@ type textAssets = {
 }
 
 async function connectToWhatsApp() {
+  console.log('connectToWa')
   const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot');
   logger.level = 'trace';
   
@@ -65,10 +85,30 @@ async function connectToWhatsApp() {
 
   const interval = 3*60*1_000 //10m
 
-  jobTasks();
+  const tasks = await getTasks();
+  const tasksP = tasks['phone'];
 
-  setInterval(() => {
-    jobTasks();
+  tasks.code.forEach(camp => {
+    const version = camp.versions[0]
+    if(!!version.code?.name) {
+      activeCodes[version.code.name] = camp
+    }
+  });
+
+  // Debería acá llamar las task para llenar una variable con las de código también.
+  // De modo que las de código las revise primero cuando recibe un mensaje,
+    // Y según si tiene phone, las filtre y ejecute.
+  setTimeout(() => jobTasksPhone(tasksP), 1_000);
+
+  setInterval(async () => {
+    const newTasks = await getTasks();
+    newTasks.code.forEach(camp => {
+      const version = camp.versions[0];
+      if(!!version.code?.name) {
+        activeCodes[version.code.name] = camp
+      }
+    });
+    jobTasksPhone(newTasks['phone']);
   }, interval);
 
   // Guardar cuando fue completado la task, luego puedo ver en que punto (como por ejemplo luego del #DONE#).
@@ -76,43 +116,47 @@ async function connectToWhatsApp() {
   // Quizá las campañas deberían crearse independientemente, para permitir una a muchas ... :).
   // Debo revisar según el date, si es default mandarlo, si no a pasado aún esperar :).
 
-  async function jobTasks () {
-    const tasks = await getTasks();
-    console.log('jobTasks: ', !!tasks, tasks.length, tasks);
-    // por alguna razón luego del firstMessage, no responde nada ...
-
-    if (!!tasks && tasks.length > 0) {
-      for(const task of tasks) {
-        if(!task?.phone) return;
-        console.log('onjobTask for..of');
-        const firstTask = task;
-        const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
-        if (!senderFlows[senderJidLocal]) {
-          senderFlows[senderJidLocal] = 'initial';
+  // Y acá no se supone que debe solo ejecutar una ??
+  async function jobTasksPhone (tasksP: Campaign[]) {
+    if (!!tasksP && tasksP.length > 0) {
+      for(const taskVs of tasksP) {
+        const task = taskVs.versions[0]
+        // Acá debo ver cuáles son los únicos que estan habilitados.
+        if(!!task && !!task?.phone && task?.phone == 573143035220 ) {
+          console.log('onjobTask for..of', task);
+          const firstTask = task;
+          const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
+          if (!senderFlows[senderJidLocal]) {
+            senderFlows[senderJidLocal] = {
+              flow: 'jobTaskPhone',
+              state: 'generating'
+            };
+          }
+          respondedToMessages.add(senderJidLocal);
+          const firstMessageR = task.firstMessage as string;
+          await sock.sendMessage(senderJidLocal, {
+            text: firstMessageR,
+          });
+          senderFlows[senderJidLocal].state = 'firstMessage';
+          if (!mHistory[senderJidLocal]) {
+            mHistory[senderJidLocal] = [
+              {role: 'system', content: task.prompt as string},
+              {role: 'assistant', content: task.firstMessage as string}
+            ];
+          }
+          saveConversation('system', task.prompt as string, Number(task.phone));
+          saveConversation('assistant', task.firstMessage as string, Number(task.phone));
+          await updateTask(taskVs, Number(task.phone));
+          await delay(1_500);
+          senderFlows[senderJidLocal].state = 'init';
+          respondedToMessages.delete(senderJidLocal);
         }
-        respondedToMessages.add(senderJidLocal);
-        senderFlows[senderJidLocal] = 'generating';
-        const firstMessageR = task.firstMessage as string;
-        await sock.sendMessage(senderJidLocal, {
-          text: firstMessageR,
-        });
-        if (!mHistory[senderJidLocal]) {
-          mHistory[senderJidLocal] = [
-            {role: 'system', content: task.prompt as string},
-            {role: 'assistant', content: task.firstMessage as string}
-          ];
-        }
-        saveConversation('system', task.prompt as string, task.phone);
-        saveConversation('assistant', task.firstMessage as string, task.phone);
-        await updateTask(task, task.phone);
-        await delay(1_500);
-        senderFlows[senderJidLocal] = 'initial';
-        respondedToMessages.delete(senderJidLocal);
       }
     }
   }
 
   sock.ev.on("connection.update", (update) => {
+    console.log('con update')
     const { connection, lastDisconnect } = update;
     if (connection === "close") {
       const shouldReconnect =
@@ -136,76 +180,112 @@ async function connectToWhatsApp() {
   sock.ev.on("messages.upsert", async (m) => {
     const receivedMessage = m.messages[0];
     const senderJid = receivedMessage.key.remoteJid;
+    const senderPhone = (senderJid?.match(/(\d+)@s\.whatsapp\.net/) ?? [])[1];
     const messageConversation = receivedMessage.message?.conversation
     const messageExtended = receivedMessage.message?.extendedTextMessage?.text
     const messageUser = !!messageConversation ? messageConversation : messageExtended;
 
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
 
+    console.log('upsert senderFlows[senderJid]: ', senderFlows[senderJid]);
+
+    if(messageUser?.includes("/stop")) {
+      console.log('upsert /stop');
+      return;
+    }
+
     if (!senderFlows[senderJid]) {
-      senderFlows[senderJid] = 'initial';
+      console.log('upsert !senderFlows[senderJid]');
+      senderFlows[senderJid] = {
+        flow: 'default',
+        state: 'init',
+        source: 'constructor()'
+      }
     }
 
-    // if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
-    //   console.log('reveived Message from: ', senderJid);
-    //   console.log(JSON.stringify(receivedMessage));
-    //   console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+    // if(messageUser?.includes("/stop")) {
+    //   senderFlows[senderJid] = {
+    //     flow: '/wait',
+    //     state: 'init',
+    //     source: '/stop constructor()',
+    //   }
+    // } else if(senderFlows[senderJid].flow === '/wait') {
+    //   senderFlows[senderJid] = {
+    //     flow: 'default',
+    //     state: 'init',
+    //     source: '/wait constructor()',
+    //   }
+    //   respondedToMessages.delete(senderJid);
     // }
-    if (senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`) {
-      console.log('!respondedToMessages.has(senderJid)', !respondedToMessages.has(senderJid));
-      console.log('reveived Message from: ', senderJid);
-      console.log(JSON.stringify(receivedMessage));
-      console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+
+    // Acá debería manejar los comandos, según prioridades, estados ...
+    // Y creo que es hora de volver todo esto funciones para darle más orden :)
+    if(messageUser?.startsWith('/')) {
+      console.log('messageUser startsWith /');
+      //* agregar si es /stop
+      // si existe ese flujo, debo comparar contra los flujos
+      for (const codeKey in activeCodes) {
+        if (activeCodes.hasOwnProperty(codeKey)) {
+          if(messageUser == codeKey) {
+            console.log(`Code Key: ${codeKey}`);
+            const campaign: Campaign = activeCodes[codeKey];
+            console.log('Campaign:', campaign);
+            jobTaskCode(codeKey, campaign, senderJid);
+            // Bueno esto quiere decir que tiene que iniciar esta task
+            // Y tiene guardado un prompt, y un firtsMessage, luego puede ser algo más avanzado, una serie de tareas
+            // Y en teoría las demás deberían estar asociadas a esas tasks, como brand ... :D
+          }
+        } else {
+          console.log(`${messageUser} flow not supported`)
+        }
+      } 
     }
 
-    if(!respondedToMessages.has(senderJid) &&
-    senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`
-    ) {
-      console.log('flag1');
-      respondedToMessages.add(senderJid);
-      // Esta respondiendo doble?, por qué volvió a enviarlo?
+    async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
+      // debo eliminar el responded para ese número, o más bien, activarlo para bloquearlo acá.
+      // Debo actualizar o crear el senderFlow a este code ...
+      // Luego de so debo ejecutar el prompt, y el firtsMessage -> Esto va a ser curioso.
+      senderFlows[senderJid] = {
+        flow: 'jobCode',
+        state: 'generating'
+      }
+      console.log('jobTaskCode');
+      if(respondedToMessages.has(senderJid)) {
+        respondedToMessages.delete(senderJid)
+        respondedToMessages.add(senderJid)
+      }
+
+      const task = campaign.versions[0];
+
+      if(task.firstMessage) await sock.sendMessage(senderJid, {
+        text: task.firstMessage,
+      });
 
       if (!mHistory[senderJid]) {
-        mHistory[senderJid] = [mvpRecluimentPrompt(), firstMessage()];
+        mHistory[senderJid] = [
+          {role: 'system', content: task.prompt as string},
+          {role: 'assistant', content: task.firstMessage as string}
+        ];
       }
-      mHistory[senderJid].push({role: 'user', content: messageUser as string});
-      console.log(mHistory, mHistory[senderJid].length);
-      if (messageUser?.includes("#DONE#")) return;
-      let payload: RequestPayloadChat = {
-        chain: 'mvpRecluimentClient',
-        messages: mHistory[senderJid],
-      };
 
-      console.log('flag2');
-
-      if(senderFlows[senderJid] === 'initial' || senderFlows[senderJid] === 'userReseach') {
-        console.log('flag3');
-        senderFlows[senderJid] = 'generating';
-        let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
-        mHistory[senderJid].push({role: 'assistant', content: gptResponse});
-        console.log('flag4');
-        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
-          text: gptResponse,
-        });
-        console.log('flag5');
-        await delay(2_500);
-        respondedToMessages.delete(senderJid);
-        if (gptResponse.includes("#DONE#")) {
-          senderFlows[senderJid] = 'initial';
-          return;
-        }
-        senderFlows[senderJid] = 'userReseach';
-        console.log('flag6');
-      }
+      saveConversation('system', task.prompt as string, Number(task.phone));
+      saveConversation('assistant', task.firstMessage as string, Number(task.phone));
+      //* Debería update según alguna politica?, número máximo ...
+      // await updateTask(taskVs, Number(task.phone));
+      await delay(1_500);
+      senderFlows[senderJid].state = 'init';
+      respondedToMessages.delete(senderJid);
     }
-    
-    if(messageUser === '/getMgs' &&
-    senderJid === `${JD_NUMBER}@s.whatsapp.net`
-    ) getMessage();
+
     if(!respondedToMessages.has(senderJid) &&
     messageUser === '/brandx' &&
-    senderFlows[senderJid] === 'initial') {
+    senderFlows[senderJid].flow === 'default' &&
+    senderFlows[senderJid].state === 'init') {
       // console.log(JSON.stringify(m, undefined, 2));
+      console.log('/brandx default init');
+
+      senderFlows[senderJid].flow === '/brandx'
+      senderFlows[senderJid].state === 'generating'
 
       respondedToMessages.add(senderJid);
 
@@ -213,19 +293,21 @@ async function connectToWhatsApp() {
         if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
           text: "Describe your product, company or idea",
         });
-        senderFlows[senderJid] = 'product';
-      }, 2_500)
+        senderFlows[senderJid].state = 'product';
+      }, 2_500);
 
       setTimeout(() => {
         respondedToMessages.delete(senderJid);
-      }, 3_500)
+      }, 3_500);
     }
+
     if(!respondedToMessages.has(senderJid) &&
-    senderFlows[senderJid] === 'product') {
+    senderFlows[senderJid].flow === '/brandx' &&
+    senderFlows[senderJid].state === 'product') {
+      console.log('/brandx product');
       sock.sendMessage(senderJid, {
         text: "generating ...",
       });
-      senderFlows[senderJid] = 'generating';
       if(!BASE_GEN) return;
       // if(JD_NUMBER !== 'string') throw Error('JD_NUMBER is no string');
 
@@ -253,8 +335,6 @@ async function connectToWhatsApp() {
           return
         }
         console.log('index#textAssets -> ', textAssets)
-        // call generate logo ...
-        //Respond
 
         let logoPrompt = '';
 
@@ -297,10 +377,158 @@ async function connectToWhatsApp() {
         setTimeout(() => {
           respondedToMessages.delete(senderJid);
         }, 2_500)
-        senderFlows[senderJid] = 'initial';
+        senderFlows[senderJid].state = 'end';
 
       }, 2_500)
     }
+
+    // Caso de continuar con la interacción de los jobs
+      // Había pensado en senderFlow, y senderState, así tengo cuál es el /skill y cuál es el estado :)
+      // En /brandx tengo luego de /brandx -> product como senderFlow
+      // En otros códigos, tengo init, pero creo que debería ser generating, y poner init al inicio.
+
+    // Caso phoneJob
+    if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
+    senderFlows[senderJid].state === 'init'
+    ) {
+      console.log('jobTaskPhone()')
+
+      senderFlows[senderJid].state = 'generating';
+
+      mHistory[senderJid].push({role: 'user', content: messageUser as string})
+
+      let payload: RequestPayloadChat = {
+        chain: 'jobTaskPhone',
+        messages: mHistory[senderJid],
+      };
+
+      // Acá simplemente sigue la conversación, entonces debo obtener el numéro asociado.
+      let gptResponse = await genChat(payload, Number(senderPhone));
+      mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+      if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+        text: gptResponse,
+      });
+
+      await delay(2_500);
+      respondedToMessages.delete(senderJid);
+      senderFlows[senderJid].state = 'init';
+    }
+    // Caso jobCodes
+    if(senderFlows[senderJid].flow === 'jobCode' &&
+    senderFlows[senderJid].state === 'init'
+    ) {
+      console.log('jobCodes')
+      if(messageUser?.includes("/done")) {
+        console.log('/done')
+        senderFlows[senderJid].flow = 'default'
+        senderFlows[senderJid].state = 'init'
+        senderFlows[senderJid].source = '/done jobTaskPhone'
+        // Si es /done, debo update estado en task para este número ...
+        return;
+      };
+
+      senderFlows[senderJid].state = 'generating';
+      console.log('jobCodes state generationg');
+
+      mHistory[senderJid].push({role: 'user', content: messageUser as string})
+
+      let payload: RequestPayloadChat = {
+        chain: 'jobTaskCode',
+        messages: mHistory[senderJid],
+      };
+
+      let gptResponse = await genChat(payload, Number(senderPhone));
+      mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+      if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+        text: gptResponse,
+      });
+
+      await delay(2_500);
+      console.log('jobCodes after delay')
+      respondedToMessages.delete(senderJid);
+      if (gptResponse.includes("/done")) {
+        console.log('jobCodes include /done');
+        senderFlows[senderJid].flow = 'default'
+        senderFlows[senderJid].state = 'init';
+        senderFlows[senderJid].source = 'gptResponse /done jobCodes'
+        return;
+      }
+      senderFlows[senderJid].state = 'init';
+      console.log('jobCodes senderFlows init');
+    }
+
+    // if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
+    //   console.log('reveived Message from: ', senderJid);
+    //   console.log(JSON.stringify(receivedMessage));
+    //   console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+    // }
+    if (senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`) {
+      // console.log('!respondedToMessages.has(senderJid)', !respondedToMessages.has(senderJid));
+      // console.log(`senderFlows[${senderJid}]`, senderFlows[senderJid]);
+      // console.log('reveived Message from: ', senderJid);
+      // console.log(messageUser);
+      // console.log(JSON.stringify(receivedMessage));
+      // console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
+    }
+
+    // Debo manejar un caso default, y un caso si X número le escribe. (checkbox-mandar 1° mensaje en UI).
+    if(!respondedToMessages.has(senderJid) &&
+    senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net` &&
+    senderFlows[senderJid].flow === 'default' &&
+    senderFlows[senderJid].state === 'init'
+    ) {
+
+      console.log('flag1 default()')
+
+      
+      // console.log('default() after /stop')
+
+
+      respondedToMessages.add(senderJid);
+      // Esta respondiendo doble?, por qué volvió a enviarlo?
+
+      if (!mHistory[senderJid]) {
+        mHistory[senderJid] = [mvpRecluimentPrompt(), firstMessage()];
+      }
+      mHistory[senderJid].push({role: 'user', content: messageUser as string});
+      // console.log(mHistory, mHistory[senderJid].length);
+      
+      let payload: RequestPayloadChat = {
+        chain: 'default',
+        messages: mHistory[senderJid],
+      };
+
+      if(senderFlows[senderJid].state === 'init' && senderFlows[senderJid].flow === 'default') {
+        console.log('default() state is init');
+        console.log('flag3');
+        senderFlows[senderJid].state = 'generating';
+        senderFlows[senderJid].source = 'generating default'
+        console.log('default() state is generating');
+        let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
+        mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: gptResponse,
+        });
+        await delay(2_500);
+        console.log('default() after await');
+        if (gptResponse.includes("/done")) {
+          senderFlows[senderJid].flow = 'default'
+          senderFlows[senderJid].state = 'init'
+          senderFlows[senderJid].source = '/done default'
+          respondedToMessages.delete(senderJid)
+          return;
+        }
+        respondedToMessages.delete(senderJid);
+        senderFlows[senderJid].state = 'init';
+        senderFlows[senderJid].source = 'end default';
+        console.log('default() end init');
+        console.log('default state', senderFlows[senderJid]);
+      }
+    }
+    
+    // if(messageUser === '/getMgs' &&
+    // senderJid === `${JD_NUMBER}@s.whatsapp.net`
+    // ) getMessage();
   });
 }
 

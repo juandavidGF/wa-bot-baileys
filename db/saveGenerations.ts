@@ -12,7 +12,6 @@ cloudinary.config({
 });
 
 export default async function saveGenerations(textAsstes: DesighBrief, logos: string[], product: string, phone: string) {
-
   if (!process.env.MONGO_DB) {
     throw new Error('Invalid environment variable: "MONGO_COLLECTION"');
   }
@@ -56,12 +55,14 @@ export default async function saveGenerations(textAsstes: DesighBrief, logos: st
 
     console.log('saveG, phone: ', typeof phone, phone)
 
+    // Debo crear varias versiones, cargar otra info como email -> para es hacer autenticación.
     const results = await collection.updateOne({ phone: phone },
 			{
 				$push: {
 					generation: generation
 				}
-			}
+			},
+      {upsert: true}
 		)
 
     if (results['modifiedCount'] === 0) {

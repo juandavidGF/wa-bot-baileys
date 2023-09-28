@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 import isDomainAvailable from './utils/isDomainAvailable';
 import clientPromise from './db/mongodb';
-import { getTasks } from './db/Tasks';
+import { getTasks } from './db/tasks';
+import { Campaign } from './models/tasks';
 
 require('dotenv').config();
 
@@ -60,9 +61,30 @@ async function findPhoneDB() {
   console.log(results)
   mongoClient.close();
 }
+async function handleTasks() {
+  interface ActiveCodes {
+    [key: string]: Campaign
+  }
+  
+  const activeCodes: ActiveCodes = {};
+
+  const tasks = await getTasks();
+
+  const tasksP = tasks['phone'];
+
+  // tasks.code.forEach((camp, index) => {
+  //   console.log(index, camp);
+  //   if(!!camp.code?.id || !!camp.code) {
+  //     activeCodes[camp.code.id] = camp
+  //   }
+  // });
+
+  console.log('activeCodes', activeCodes);
+}
 
 // getDomain()
 // printItems()
 // findPhoneDB()
+// getTasks();
 
-getTasks();
+handleTasks();

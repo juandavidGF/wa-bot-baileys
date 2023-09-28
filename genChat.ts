@@ -39,7 +39,13 @@ export async function genChat(payload: any, phone: number) {
 		case "logoChain":
 			response = await getOneByOne(payload, phone);
 			break;
-		case "mvpRecluimentClient":
+		case "jobTaskCode":
+			response = await getMVPRecluiment(payload.messages, phone);
+			break;
+		case "jobTaskCode":
+			response = await getMVPRecluiment(payload.messages, phone);
+			break;
+		case "default":
 			response = await getMVPRecluiment(payload.messages, phone);
 			break;
 		default:
@@ -53,7 +59,7 @@ export async function genChat(payload: any, phone: number) {
 
 async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: number) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
-	console.log('getMVPRecluiment#messagess: ', messages);
+	// console.log('getMVPRecluiment#messagess: ', messages);
 	let lastMessage = messages[messages.length - 1]?.content;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone);
@@ -273,7 +279,7 @@ async function getByFunctionCalling({chain, prompt}: RequestPayload) {
 	
 		let responseMessage = response.choices[0].message;
 	
-		console.log('responseMessage: ', responseMessage);
+		// console.log('responseMessage: ', responseMessage);
 	
 		if (responseMessage?.function_call) {
 			let function_name = responseMessage.function_call.name;
@@ -298,7 +304,7 @@ async function getByFunctionCalling({chain, prompt}: RequestPayload) {
 					throw new Error(`Function not implemented: ${function_name}`);
 			}
 	
-			console.log('genChat#functionResponse: ', functionResponse);
+			// console.log('genChat#functionResponse: ', functionResponse);
 
       // si no tiene todos los párametros error
       if(Object.values(functionResponse).some(value => value === undefined)) {
