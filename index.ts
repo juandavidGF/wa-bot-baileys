@@ -392,6 +392,16 @@ async function connectToWhatsApp() {
       // En otros códigos, tengo init, pero creo que debería ser generating, y poner init al inicio.
 
 
+    // Caso phoneJob
+    if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
+    senderFlows[senderJid].state === 'init'
+    ) jobTask('jobTaskPhone', senderJid);
+    
+    // Caso jobCodes
+    if(senderFlows[senderJid].flow === 'jobCode' &&
+    senderFlows[senderJid].state === 'init'
+    ) jobTask('jobTaskCode', senderJid);
+
     async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode', senderJid: string) {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
@@ -426,47 +436,6 @@ async function connectToWhatsApp() {
       }
       mHistory[senderJid].push({role: 'assistant', content: gptResponse});
       console.log(mHistory[senderJid]);
-
-    }
-
-    // Caso phoneJob
-    if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
-    senderFlows[senderJid].state === 'init'
-    ) jobTask('jobTaskPhone', senderJid)
-    
-    // Caso jobCodes
-    if(senderFlows[senderJid].flow === 'jobCode' &&
-    senderFlows[senderJid].state === 'init'
-    ) {
-      console.log('jobCodes state generationg');
-      senderFlows[senderJid].state = 'generating';
-
-      mHistory[senderJid].push({role: 'user', content: messageUser as string})
-
-      let payload: RequestPayloadChat = {
-        chain: 'jobTaskCode',
-        messages: mHistory[senderJid],
-      };
-
-      let gptResponse = await genChat(payload, Number(senderPhone));
-      // si tiene done, elimino esa parte. 
-      mHistory[senderJid].push({role: 'assistant', content: gptResponse});
-      if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
-        text: gptResponse,
-      });
-
-      await delay(2_500);
-      console.log('jobCodes after delay')
-      respondedToMessages.delete(senderJid);
-      if (gptResponse.includes("/done")) {
-        console.log('jobCodes include /done');
-        senderFlows[senderJid].flow = 'default'
-        senderFlows[senderJid].state = 'init';
-        senderFlows[senderJid].source = 'gptResponse /done jobCodes'
-        return;
-      }
-      senderFlows[senderJid].state = 'init';
-      console.log('jobCodes senderFlows init');
     }
 
     // if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
