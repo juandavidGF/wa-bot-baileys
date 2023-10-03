@@ -6,7 +6,7 @@ import makeWASocket, {
 import { Boom } from "@hapi/boom";
 import logger from "./utils/logger";
 import { delay } from "./utils/delay";
-import { firstMessage, mvpRecluimentPrompt } from "./lib/Prompts";
+import { defaultPrompt, firstMessage } from "./lib/Prompts";
 
 import { genChat, saveConversation } from './genChat';
 import getLogo from './getLogo';
@@ -32,12 +32,12 @@ interface SenderFlowState {
   flow: string;
   state: string;
   source?: string;
+  task?: any;
 }
 
 interface SenderFlows {
   [senderJid: string]: SenderFlowState;
 }
-
 
 interface ActiveCodes {
   [key: string]: Campaign
@@ -72,7 +72,6 @@ type textAssets = {
 }
 
 async function connectToWhatsApp() {
-  console.log('connectToWa')
   const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot');
   logger.level = 'trace';
   
@@ -126,24 +125,22 @@ async function connectToWhatsApp() {
           console.log('onjobTask for..of', task);
           const firstTask = task;
           const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
-          if (!senderFlows[senderJidLocal]) {
-            senderFlows[senderJidLocal] = {
-              flow: 'jobTaskPhone',
-              state: 'generating'
-            };
-          }
+          senderFlows[senderJidLocal] = {
+            flow: 'jobTaskPhone',
+            state: 'generating'
+          };
+          
           respondedToMessages.add(senderJidLocal);
           const firstMessageR = task.firstMessage as string;
           await sock.sendMessage(senderJidLocal, {
             text: firstMessageR,
           });
           senderFlows[senderJidLocal].state = 'firstMessage';
-          if (!mHistory[senderJidLocal]) {
-            mHistory[senderJidLocal] = [
-              {role: 'system', content: task.prompt as string},
-              {role: 'assistant', content: task.firstMessage as string}
-            ];
-          }
+          mHistory[senderJidLocal] = []
+          mHistory[senderJidLocal] = [
+            {role: 'system', content: task.prompt as string},
+            {role: 'assistant', content: task.firstMessage as string}
+          ];
           saveConversation('system', task.prompt as string, Number(task.phone));
           saveConversation('assistant', task.firstMessage as string, Number(task.phone));
           await updateTask(taskVs, Number(task.phone));
@@ -189,11 +186,21 @@ async function connectToWhatsApp() {
 
     console.log('upsert senderFlows[senderJid]: ', senderFlows[senderJid]);
 
+    //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
     if(messageUser?.includes("/stop")) {
+      senderFlows[senderJid] = {
+        flow: 'default',
+        state: 'init',
+        source: '/stop userMessage',
+      }
+      mHistory[senderJid] = [];
+
+      //* Debería aca borrar el historial?
       console.log('upsert /stop');
       return;
     }
 
+    // if available !! <- guardar esa info en la DB y luego en alguna estructura, porque pueden ser muchos !!
     if (!senderFlows[senderJid]) {
       console.log('upsert !senderFlows[senderJid]');
       senderFlows[senderJid] = {
@@ -247,13 +254,10 @@ async function connectToWhatsApp() {
       // Luego de so debo ejecutar el prompt, y el firtsMessage -> Esto va a ser curioso.
       senderFlows[senderJid] = {
         flow: 'jobCode',
-        state: 'generating'
+        state: 'generating',
       }
       console.log('jobTaskCode');
-      if(respondedToMessages.has(senderJid)) {
-        respondedToMessages.delete(senderJid)
-        respondedToMessages.add(senderJid)
-      }
+      respondedToMessages.add(senderJid)
 
       const task = campaign.versions[0];
 
@@ -261,12 +265,12 @@ async function connectToWhatsApp() {
         text: task.firstMessage,
       });
 
-      if (!mHistory[senderJid]) {
-        mHistory[senderJid] = [
-          {role: 'system', content: task.prompt as string},
-          {role: 'assistant', content: task.firstMessage as string}
-        ];
-      }
+      // En teoría acá debería reiniciar la historia.
+      mHistory[senderJid] = []
+      mHistory[senderJid] = [
+        {role: 'system', content: task.prompt as string},
+        {role: 'assistant', content: task.firstMessage as string}
+      ];
 
       saveConversation('system', task.prompt as string, Number(task.phone));
       saveConversation('assistant', task.firstMessage as string, Number(task.phone));
@@ -404,29 +408,33 @@ async function connectToWhatsApp() {
 
       // Acá simplemente sigue la conversación, entonces debo obtener el numéro asociado.
       let gptResponse = await genChat(payload, Number(senderPhone));
+      if (gptResponse.includes("/done")) {
+        // Creo que esto no lo guarda ... :think
+        const regex = new RegExp(`\\/done.*`);
+        gptResponse = gptResponse.replace(regex, "");
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: gptResponse,
+        });
+        await delay(2_000)
+        senderFlows[senderJid].flow = 'done'
+        senderFlows[senderJid].state = 'init'
+        senderFlows[senderJid].source = '/done default'
+      } else {
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: gptResponse,
+        });
+  
+        await delay(2_500);
+        respondedToMessages.delete(senderJid);
+        senderFlows[senderJid].state = 'init';
+      }
       mHistory[senderJid].push({role: 'assistant', content: gptResponse});
-      if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
-        text: gptResponse,
-      });
-
-      await delay(2_500);
-      respondedToMessages.delete(senderJid);
-      senderFlows[senderJid].state = 'init';
+      console.log(mHistory[senderJid]);
     }
     // Caso jobCodes
     if(senderFlows[senderJid].flow === 'jobCode' &&
     senderFlows[senderJid].state === 'init'
     ) {
-      console.log('jobCodes')
-      if(messageUser?.includes("/done")) {
-        console.log('/done')
-        senderFlows[senderJid].flow = 'default'
-        senderFlows[senderJid].state = 'init'
-        senderFlows[senderJid].source = '/done jobTaskPhone'
-        // Si es /done, debo update estado en task para este número ...
-        return;
-      };
-
       senderFlows[senderJid].state = 'generating';
       console.log('jobCodes state generationg');
 
@@ -438,6 +446,7 @@ async function connectToWhatsApp() {
       };
 
       let gptResponse = await genChat(payload, Number(senderPhone));
+      // si tiene done, elimino esa parte. 
       mHistory[senderJid].push({role: 'assistant', content: gptResponse});
       if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
         text: gptResponse,
@@ -478,8 +487,7 @@ async function connectToWhatsApp() {
     senderFlows[senderJid].state === 'init'
     ) {
 
-      console.log('flag1 default()')
-
+      console.log('flag1 default()');
       
       // console.log('default() after /stop')
 
@@ -487,8 +495,9 @@ async function connectToWhatsApp() {
       respondedToMessages.add(senderJid);
       // Esta respondiendo doble?, por qué volvió a enviarlo?
 
+      // Actualizar flujo acá.
       if (!mHistory[senderJid]) {
-        mHistory[senderJid] = [mvpRecluimentPrompt(), firstMessage()];
+        mHistory[senderJid] = [defaultPrompt(), firstMessage()];
       }
       mHistory[senderJid].push({role: 'user', content: messageUser as string});
       // console.log(mHistory, mHistory[senderJid].length);
@@ -505,24 +514,34 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].source = 'generating default'
         console.log('default() state is generating');
         let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
-        mHistory[senderJid].push({role: 'assistant', content: gptResponse});
-        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
-          text: gptResponse,
-        });
-        await delay(2_500);
-        console.log('default() after await');
         if (gptResponse.includes("/done")) {
-          senderFlows[senderJid].flow = 'default'
+          // Creo que esto no lo guarda ... :think
+          const regex = new RegExp(`\\/done.*`);
+          gptResponse = gptResponse.replace(regex, "");
+          if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+            text: gptResponse,
+          });
+          await delay(2_000)
+          mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+          console.log(mHistory[senderJid]);
+          senderFlows[senderJid].flow = 'done'
           senderFlows[senderJid].state = 'init'
           senderFlows[senderJid].source = '/done default'
-          respondedToMessages.delete(senderJid)
-          return;
+          console.log('gptResponse /done, ', gptResponse, senderFlows);
+        } else {
+          if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+            text: gptResponse,
+          });
+          await delay(2_000)
+          respondedToMessages.delete(senderJid);
+          senderFlows[senderJid].state = 'init';
+          senderFlows[senderJid].source = 'end default';
+          console.log('default() end init');
+          console.log('default state', senderFlows[senderJid]);
         }
-        respondedToMessages.delete(senderJid);
-        senderFlows[senderJid].state = 'init';
-        senderFlows[senderJid].source = 'end default';
-        console.log('default() end init');
-        console.log('default state', senderFlows[senderJid]);
+        console.log('default() after await');
+        mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+        console.log(mHistory[senderJid]);
       }
     }
     

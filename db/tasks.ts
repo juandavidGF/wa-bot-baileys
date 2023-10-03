@@ -98,20 +98,20 @@ export async function updateTask(task: Campaign, phone: number) {
   
     if (updateResult.matchedCount === 1) {
       // Update was successful
-      console.log(`Campaign with _id ${task._id} updated successfully.`);
+      console.log(`Campaign with _id ${task.email} updated successfully.`);
     } else {
       // No matching document found
-      console.log(`No campaign found with _id ${task._id}.`);
+      console.log(`Update Task, No campaign found with _id ${task._id}.`);
     }
 
     // Check the update result
-    console.log('Update Task Result:', updateResult);
+    // console.log('Update Task Result:', updateResult);
 
-    if (updateResult.modifiedCount > 0) {
-      console.log('Updated the first matching document.');
-    } else {
-      console.log('No documents were updated.');
-    }
+    // if (updateResult.modifiedCount > 0) {
+    //   console.log('Updated task: success the first matching document.');
+    // } else {
+    //   console.log('No documents were updated.');
+    // }
   } catch (error: any) {
     console.error('error updateTask: ', error.message);
     throw Error('err updateTask');

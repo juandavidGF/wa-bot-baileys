@@ -39,7 +39,7 @@ export async function genChat(payload: any, phone: number) {
 		case "logoChain":
 			response = await getOneByOne(payload, phone);
 			break;
-		case "jobTaskCode":
+		case "jobTaskPhone":
 			response = await getMVPRecluiment(payload.messages, phone);
 			break;
 		case "jobTaskCode":
@@ -63,17 +63,29 @@ async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: 
 	let lastMessage = messages[messages.length - 1]?.content;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone);
-	
-	const gptResponse = (await openai.chat.completions.create({
-    messages: messages,
-    model: 'gpt-3.5-turbo',
-  })).choices[0].message.content;
-	if(gptResponse == null) {
-		throw Error('We didnt get a response getMVPRecluiment');
-	}
 
-	await saveConversation('assistant', gptResponse, phone);
-	return gptResponse;
+	try {
+		const gptResponse = (await openai.chat.completions.create({
+			messages: messages,
+			model: 'gpt-3.5-turbo',
+		})).choices[0].message.content;
+		if(gptResponse == null) {
+			throw Error('We didnt get a response getMVPRecluiment');
+		}
+	
+		// error.code "context_length_exceeded" task de resumir. Y no parar proceso, solo decir err si alcaso.
+		// O utilizar otro modelo más grande.
+	
+		await saveConversation('assistant', gptResponse, phone);
+		return gptResponse;
+	} catch (error: any) {
+		if(error.code === 'context_length_exceeded') {
+			console.log('context_length_exceeded')
+			// summary task and recall getMVPRecluiment, contar número de tokens. Porque no se si pueda hacerlo, de una.
+			return 'error';
+		}
+	}
+	
 }
 
 export async function saveConversation(role: 'user' | 'assistant' | 'system', message: string, phone: number) {
