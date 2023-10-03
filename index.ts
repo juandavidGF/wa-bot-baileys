@@ -391,21 +391,17 @@ async function connectToWhatsApp() {
       // En /brandx tengo luego de /brandx -> product como senderFlow
       // En otros códigos, tengo init, pero creo que debería ser generating, y poner init al inicio.
 
-    // Caso phoneJob
-    if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
-    senderFlows[senderJid].state === 'init'
-    ) {
-      console.log('jobTaskPhone()')
 
+    async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode', senderJid: string) {
+      console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
 
       mHistory[senderJid].push({role: 'user', content: messageUser as string})
 
       let payload: RequestPayloadChat = {
-        chain: 'jobTaskPhone',
+        chain: flowTaskChain,
         messages: mHistory[senderJid],
       };
-
       // Acá simplemente sigue la conversación, entonces debo obtener el numéro asociado.
       let gptResponse = await genChat(payload, Number(senderPhone));
       if (gptResponse.includes("/done")) {
@@ -415,7 +411,7 @@ async function connectToWhatsApp() {
         if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
           text: gptResponse,
         });
-        await delay(2_000)
+        await delay(2_000);
         senderFlows[senderJid].flow = 'done'
         senderFlows[senderJid].state = 'init'
         senderFlows[senderJid].source = '/done default'
@@ -430,13 +426,20 @@ async function connectToWhatsApp() {
       }
       mHistory[senderJid].push({role: 'assistant', content: gptResponse});
       console.log(mHistory[senderJid]);
+
     }
+
+    // Caso phoneJob
+    if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
+    senderFlows[senderJid].state === 'init'
+    ) jobTask('jobTaskPhone', senderJid)
+    
     // Caso jobCodes
     if(senderFlows[senderJid].flow === 'jobCode' &&
     senderFlows[senderJid].state === 'init'
     ) {
-      senderFlows[senderJid].state = 'generating';
       console.log('jobCodes state generationg');
+      senderFlows[senderJid].state = 'generating';
 
       mHistory[senderJid].push({role: 'user', content: messageUser as string})
 
