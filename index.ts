@@ -485,7 +485,10 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].state = 'generating';
         senderFlows[senderJid].source = 'generating default'
         console.log('default() state is generating');
-        let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
+        let {gptResponse, summary } = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
+        mHistory[senderJid].slice(2 + 1)
+        mHistory[senderJid].push({role: 'system', content: summary});
+
         if (gptResponse.includes("/done")) {
           // Creo que esto no lo guarda ... :think
           const regex = new RegExp(`\\/done.*`);

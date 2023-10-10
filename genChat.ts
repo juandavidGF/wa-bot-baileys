@@ -64,11 +64,32 @@ async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: 
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone);
 
+	let chatHistory = ""
+
+	for(const m in messages) {
+		messages[m].role
+		messages[m].content
+		
+		chatHistory.concat(" role: ", messages[m].role, " content: ", messages[m].content as string);
+	}
+
+	const summary = (await openai.chat.completions.create({
+		messages: [{role: 'system', content: `Make a short summary of this conversation between one AI and Human: ${chatHistory} /n`}],
+		model: 'gpt-3.5-turbo',
+	})).choices[0].message.content
+
+	summary?.concat("AI:");
+
 	try {
-		const gptResponse = (await openai.chat.completions.create({
-			messages: messages,
+		const gptResponseFull = await openai.chat.completions.create({
+			messages: [{role: 'system', content: summary}],
 			model: 'gpt-3.5-turbo',
-		})).choices[0].message.content;
+		});
+		const gptResponse = gptResponseFull.choices[0].message.content;
+		const totalTokens = gptResponseFull.usage?.total_tokens 
+		if(!!totalTokens && totalTokens > 4000/3) {
+			console.log('totalTokens > 4000/3: ', totalTokens);
+		}
 		if(gptResponse == null) {
 			throw Error('We didnt get a response getMVPRecluiment');
 		}
@@ -77,7 +98,7 @@ async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: 
 		// O utilizar otro modelo más grande.
 	
 		await saveConversation('assistant', gptResponse, phone);
-		return gptResponse;
+		return {gptResponse, summary};
 	} catch (error: any) {
 		if(error.code === 'context_length_exceeded') {
 			console.log('context_length_exceeded')
