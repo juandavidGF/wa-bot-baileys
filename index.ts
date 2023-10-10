@@ -15,8 +15,39 @@ import saveGenerations from './db/saveGenerations';
 import { DesighBrief } from "./models/logoapp";
 import { ChatCompletionMessageParam } from "openai/resources/chat";
 
+import { PromptTemplate } from "langchain/prompts";
+
 import { getTasks, updateTask } from './db/tasks';
 import { Campaign } from "./models/tasks";
+
+
+import { LLMChain } from "langchain/chains";
+
+import { OpenAI } from "langchain/llms/openai";
+import { ChatOpenAI } from "langchain/chat_models/openai";
+import { ConversationSummaryBufferMemory } from "langchain/memory";
+import { ConversationChain } from "langchain/chains";
+import {
+  ChatPromptTemplate,
+  HumanMessagePromptTemplate,
+  MessagesPlaceholder,
+  SystemMessagePromptTemplate,
+} from "langchain/prompts";
+
+import { ConversationSummaryMemory } from "langchain/memory";
+
+const model = new OpenAI({ temperature: 0.9 });
+
+const memory = new ConversationSummaryMemory({
+  memoryKey: "chat_history",
+  llm: new OpenAI({ modelName: "gpt-3.5-turbo", temperature: 0.9 }),
+});
+
+interface chainMessages {
+  [key: string]: ConversationChain; // Key is a string, value is an array of Message objects
+}
+const chainHistory: chainMessages = {} as chainMessages;
+
 
 require('dotenv').config();
 
@@ -31,6 +62,7 @@ const BASE_GEN = process.env.BASE_GEN;
 interface SenderFlowState {
   flow: string;
   state: string;
+  skill?: string,
   source?: string;
   task?: any;
 }
@@ -88,8 +120,10 @@ async function connectToWhatsApp() {
   const tasksP = tasks['phone'];
 
   tasks.code.forEach(camp => {
-    const version = camp.versions[0]
+    //  acá no devuelve todas?, o solo la última?.
+    const version = camp.versions[0];
     if(!!version.code?.name) {
+      console.log(JSON.stringify(camp))
       activeCodes[version.code.name] = camp
     }
   });
@@ -97,7 +131,7 @@ async function connectToWhatsApp() {
   // Debería acá llamar las task para llenar una variable con las de código también.
   // De modo que las de código las revise primero cuando recibe un mensaje,
     // Y según si tiene phone, las filtre y ejecute.
-  setTimeout(() => jobTasksPhone(tasksP), 1_000);
+  setTimeout(() => jobTasksPhone(tasksP), 3_000);
 
   setInterval(async () => {
     const newTasks = await getTasks();
@@ -153,7 +187,7 @@ async function connectToWhatsApp() {
   }
 
   sock.ev.on("connection.update", (update) => {
-    console.log('con update')
+    console.log('con update');
     const { connection, lastDisconnect } = update;
     if (connection === "close") {
       const shouldReconnect =
@@ -227,13 +261,16 @@ async function connectToWhatsApp() {
 
     // Acá debería manejar los comandos, según prioridades, estados ...
     // Y creo que es hora de volver todo esto funciones para darle más orden :)
+    // const regex = /#([^#\s]+)#/g;
+    // const matches = messageUser?.match(regex);
+    // matches[0].replace(/#/g, "");
     if(messageUser?.startsWith('/')) {
       console.log('messageUser startsWith /');
       //* agregar si es /stop
       // si existe ese flujo, debo comparar contra los flujos
       for (const codeKey in activeCodes) {
         if (activeCodes.hasOwnProperty(codeKey)) {
-          if(messageUser == codeKey) {
+          if(messageUser === codeKey) {
             console.log(`Code Key: ${codeKey}`);
             const campaign: Campaign = activeCodes[codeKey];
             console.log('Campaign:', campaign);
@@ -245,7 +282,7 @@ async function connectToWhatsApp() {
         } else {
           console.log(`${messageUser} flow not supported`)
         }
-      } 
+      }
     }
 
     async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
@@ -255,6 +292,8 @@ async function connectToWhatsApp() {
       senderFlows[senderJid] = {
         flow: 'jobCode',
         state: 'generating',
+        task: campaign,
+        source: 'jobTaskCode'
       }
       console.log('jobTaskCode');
       respondedToMessages.add(senderJid)
@@ -370,7 +409,6 @@ async function connectToWhatsApp() {
         if(typeof textAssets.whyLogo === 'string') sock.sendMessage(senderJid, {
           text: "Logo Composition: " + textAssets.whyLogo,
         });
-
         
         const phone = senderJid.split('@')[0];
         if(typeof product !== 'string') return
@@ -395,14 +433,141 @@ async function connectToWhatsApp() {
     // Caso phoneJob
     if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
     senderFlows[senderJid].state === 'init'
-    ) jobTask('jobTaskPhone', senderJid);
+    ) jobTask('jobTaskPhone', senderJid, senderFlows[senderJid].task);
     
     // Caso jobCodes
     if(senderFlows[senderJid].flow === 'jobCode' &&
     senderFlows[senderJid].state === 'init'
-    ) jobTask('jobTaskCode', senderJid);
+    ) jobTask('jobTaskCode', senderJid, senderFlows[senderJid].task);
 
-    async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode', senderJid: string) {
+    async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', senderJid: string, task?: Campaign) {
+      console.log('jobTask ', flowTaskChain);
+      senderFlows[senderJid].state = 'generating';
+      senderFlows[senderJid].source = 'jobTask';
+
+      mHistory[senderJid].push({role: 'user', content: messageUser as string})
+
+      let payload: RequestPayloadChat = {
+        chain: flowTaskChain,
+        messages: mHistory[senderJid],
+      };
+      let gptResponse = await genChat(payload, Number(senderPhone)) as string;
+
+      // Si acá comienza con "/", entonces el nuevo flow va a tener esa palabra,
+      // Tengo que extraer la palabra con /
+      // Y entonces se la asigno a flow, de modo que bueno, ese flow debe tener un prompt, o un job asociado,
+      // Entonces luego de /end, debe generar nuevo prompt, así que es un job que no tiene respuesta al usuario,
+      // Entonces debe haber un nuevo JobSys, que es solo para el sistema. Y esa respuesta es la la entrada del siguiente flow :)
+      // Y luego de que lo realiza, inicia un nuevo flow al que este asociado.
+      // Ese nuevo job asciado sería un JobTask, y entonces 
+      // Debo entonces tener un type (jobPhone, Code o Sys),
+      // Y según el que sea, debo entrar a el,
+
+
+      console.log('jobTask() gptResponse: ', gptResponse, task?.versions[0]?.nxCode, gptResponse.includes(task?.versions[0]?.nxCode as string));
+      
+      if (gptResponse.includes("/done")) {
+        // Creo que esto no lo guarda ... :think
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: gptResponse,
+        });
+        await delay(2_000);
+        senderFlows[senderJid].flow = 'done'
+        senderFlows[senderJid].state = 'init'
+        senderFlows[senderJid].source = '/done default'
+      } else if(task?.versions[0]?.nxCode && gptResponse.includes(task?.versions[0]?.nxCode)) {
+        console.log('jobTask() includes nxCode ', task?.versions[0]?.nxCode);
+        const skill = task.versions[0].nxCode;
+        let isSkill = false;
+
+        for (const codeKey in activeCodes) {
+          if (activeCodes.hasOwnProperty(codeKey)) {
+            if(skill === codeKey) {
+              console.log(`skills ${skill} is === to codeKey ${codeKey}`);
+              isSkill = true;
+              console.log('codeKey');
+              const campaign: Campaign = activeCodes[codeKey];
+              console.log('Campaign:', campaign);
+              // Acá se que existe un mensaje para activar un nuevo skill, tengo un history, Y se lo debo pasar a
+              if(campaign.versions[0].type === 'jobSys') {
+                jobSys(skill, senderJid, campaign);
+              } else {
+                // Lo que creo es que acá se va a repetir, porque llama a esta misma función, y agrega el messageUser
+                jobTask('jobChain', senderJid, campaign);
+              }
+              // jobTaskCode(codeKey, campaign, senderJid);
+            }
+          }
+        }
+        if(!isSkill) {
+          if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
+            text: gptResponse,
+          });
+    
+          await delay(2_500);
+          respondedToMessages.delete(senderJid);
+          senderFlows[senderJid].state = 'init';
+        }
+      } else {
+        console.log('jobTask() not includes');
+        if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
+          text: gptResponse,
+        });
+  
+        await delay(2_500);
+        respondedToMessages.delete(senderJid);
+        senderFlows[senderJid].state = 'init';
+        senderFlows[senderJid].source = 'jobTask not includes codes';
+      }
+      mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+      // console.log(mHistory[senderJid]);
+    }
+
+    async function jobSys(skill: string, senderJid: string, campaign: Campaign) {
+      // Acá tengo el skill, tengo toda la campaign asociada al skill, y el sender.
+      // Con eso puedo iniciar el prompt, para con la información de history actual, generar lo que necesite.
+      // En este caso solo debo agregarle a mHistory el nuevo sysPrompt, y entonces esperar la respuesta
+      // Esa respuesta va a conformar el sys de el nuevo jobTask, que ese si va a responderle al usuario, :)
+      console.log('jobSys');
+      senderFlows[senderJid].flow = 'jobSys'
+      senderFlows[senderJid].state = 'generating';
+      senderFlows[senderJid].source = 'jobSys';
+      
+      const sysPrompt = campaign.versions[0].prompt;
+      mHistory[senderJid].push({role: 'system', content: sysPrompt});
+
+      const payloadSys: RequestPayloadChat = {
+        chain: 'jobTaskSys',
+        messages: mHistory[senderJid],
+      };
+
+      const gptResponseSys = await genChat(payloadSys, Number(senderPhone));
+
+      mHistory[senderJid] = [];
+      mHistory[senderJid].push({ role: 'system', content: gptResponseSys });
+
+      console.log('gptResponseSys: ', gptResponseSys);
+
+      const payload: RequestPayloadChat = {
+        chain: 'jobTaskSys',
+        messages: mHistory[senderJid],
+      };
+
+      const gptResponse = await genChat(payload, Number(senderPhone));
+      await sock.sendMessage(senderJid, {
+        text: gptResponse,
+      });
+      await delay(2_000);
+
+      senderFlows[senderJid] = {
+        flow: 'jobCode',
+        state: 'init',
+      }
+      senderFlows[senderJid].source = 'jobSys end';
+      console.log(mHistory[senderJid]);
+    }
+
+    async function jobTask2(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode', senderJid: string) {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
 
@@ -467,6 +632,21 @@ async function connectToWhatsApp() {
       respondedToMessages.add(senderJid);
       // Esta respondiendo doble?, por qué volvió a enviarlo?
 
+
+      if(!chainHistory[senderJid]) {
+        const prompt =
+          PromptTemplate.fromTemplate(`The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
+
+        Current conversation:
+        {chat_history}
+        Human: {input}
+        AI:`);
+        const chain = new LLMChain({ llm: model, prompt, memory });
+
+        chainHistory[senderJid] = chain;
+      }
+
+
       // Actualizar flujo acá.
       if (!mHistory[senderJid]) {
         mHistory[senderJid] = [defaultPrompt(), firstMessage()];
@@ -485,7 +665,11 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].state = 'generating';
         senderFlows[senderJid].source = 'generating default'
         console.log('default() state is generating');
-        let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
+        // let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
+
+        let gptResponse =  (await chainHistory[senderJid].call({ input: messageUser })).text
+        console.log({memory: await memory.loadMemoryVariables({})})
+
         if (gptResponse.includes("/done")) {
           // Creo que esto no lo guarda ... :think
           const regex = new RegExp(`\\/done.*`);
@@ -513,7 +697,7 @@ async function connectToWhatsApp() {
         }
         console.log('default() after await');
         mHistory[senderJid].push({role: 'assistant', content: gptResponse});
-        console.log(mHistory[senderJid]);
+        // console.log(mHistory[senderJid]);
       }
     }
     

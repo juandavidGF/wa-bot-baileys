@@ -45,6 +45,9 @@ export async function genChat(payload: any, phone: number) {
 		case "jobTaskCode":
 			response = await getMVPRecluiment(payload.messages, phone);
 			break;
+		case "jobTaskSys":
+			response = await getMVPRecluiment(payload.messages, phone);
+			break;
 		case "default":
 			response = await getMVPRecluiment(payload.messages, phone);
 			break;

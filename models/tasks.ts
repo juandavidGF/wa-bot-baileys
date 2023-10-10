@@ -32,8 +32,10 @@ interface Code {
 export interface Version {
 	name: string,
 	description?: string,
+	type?: 'jobTask' | 'jobSys',
 	phone?: number,
 	code?: Code,
+	nxCode?: string,
 	firstMessage?: string,
 	prompt: string,
 	stage?: string,
