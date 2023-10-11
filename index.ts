@@ -25,7 +25,6 @@ import { LLMChain } from "langchain/chains";
 
 import { OpenAI } from "langchain/llms/openai";
 import { ChatOpenAI } from "langchain/chat_models/openai";
-import { ConversationSummaryBufferMemory } from "langchain/memory";
 import { ConversationChain } from "langchain/chains";
 import {
   ChatPromptTemplate,
@@ -36,11 +35,10 @@ import {
 
 import { ConversationSummaryMemory } from "langchain/memory";
 
-const model = new OpenAI({ temperature: 0.9 });
+const model = new ChatOpenAI({ temperature: 0.9, verbose: true });
 
-const memory = new ConversationSummaryMemory({
-  memoryKey: "chat_history",
-  llm: new OpenAI({ modelName: "gpt-3.5-turbo", temperature: 0.9 }),
+const chatPromptMemory = new ConversationSummaryMemory({
+  llm: new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 }),
 });
 
 interface chainMessages {
@@ -123,7 +121,7 @@ async function connectToWhatsApp() {
     //  acá no devuelve todas?, o solo la última?.
     const version = camp.versions[0];
     if(!!version.code?.name) {
-      console.log(JSON.stringify(camp))
+      // console.log(JSON.stringify(camp))
       activeCodes[version.code.name] = camp
     }
   });
@@ -634,18 +632,26 @@ async function connectToWhatsApp() {
 
 
       if(!chainHistory[senderJid]) {
-        const prompt =
-          PromptTemplate.fromTemplate(`The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-        Current conversation:
-        {chat_history}
-        Human: {input}
-        AI:`);
-        const chain = new LLMChain({ llm: model, prompt, memory });
+        const chatPrompt = ChatPromptTemplate.fromMessages([
+          SystemMessagePromptTemplate.fromTemplate(
+            "The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."
+          ),
+          SystemMessagePromptTemplate.fromTemplate(
+            defaultPrompt().content as string
+          ),
+          new MessagesPlaceholder("history"),
+          HumanMessagePromptTemplate.fromTemplate("{input}"),
+        ]);
+        
+        const chain = new ConversationChain({
+          llm: model,
+          memory: chatPromptMemory,
+          prompt: chatPrompt,
+        });
 
         chainHistory[senderJid] = chain;
       }
-
 
       // Actualizar flujo acá.
       if (!mHistory[senderJid]) {
@@ -665,10 +671,9 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].state = 'generating';
         senderFlows[senderJid].source = 'generating default'
         console.log('default() state is generating');
-        // let gptResponse = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
-
-        let gptResponse =  (await chainHistory[senderJid].call({ input: messageUser })).text
-        console.log({memory: await memory.loadMemoryVariables({})})
+        let {gptResponse, chain } = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT), chainHistory[senderJid]);
+        // console.log({ gptResponse, memory: await chain.loadMemoryVariables({}) });
+        chainHistory[senderJid] = chain;
 
         if (gptResponse.includes("/done")) {
           // Creo que esto no lo guarda ... :think
@@ -696,7 +701,7 @@ async function connectToWhatsApp() {
           console.log('default state', senderFlows[senderJid]);
         }
         console.log('default() after await');
-        mHistory[senderJid].push({role: 'assistant', content: gptResponse});
+        // mHistory[senderJid].push({role: 'assistant', content: gptResponse});
         // console.log(mHistory[senderJid]);
       }
     }

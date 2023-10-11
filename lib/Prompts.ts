@@ -44,7 +44,7 @@ export function defaultPrompt() {
   return message;
 }
 
-export function firstMessage(campaing = 'default') {
+export function firstMessage(campaing = 'test') {
   let message: ChatCompletionMessageParam;
   switch (campaing) {
     case 'test':
