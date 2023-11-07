@@ -41,10 +41,10 @@ export async function genChat(payload: any, phone: number, chain: any = null) {
 			response = await getOneByOne(payload, phone);
 			break;
 		case "jobTaskPhone":
-			response = await generate(payload.messages, phone);
+			response = await generate(payload.messages, phone, chain);
 			break;
 		case "jobTaskCode":
-			response = await generate(payload.messages, phone);
+			response = await generate(payload.messages, phone, chain);
 			break;
 		case "jobTaskSys":
 			response = await generate(payload.messages, phone);
@@ -65,12 +65,13 @@ async function generate(messages:  ChatCompletionMessageParam[], phone: number, 
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
 	// console.log('getMVPRecluiment#messagess: ', messages);
 	console.log('/gC generate flag2');
-	let lastMessage = messages[messages.length - 1]?.content;
+	let lastMessage = messages[messages.length - 1]?.content as string;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone);
 
 	try {
 		console.log('/gC before chain.call generate flag2', lastMessage);
+		// let gptResponse = await getGPTNew();
 		let gptResponse =  await chain.predict({ input: lastMessage });
 		// console.log('/genChat gptResponse: ', gptResponse);
 		// const gptResponse = (await openai.chat.completions.create({
@@ -88,8 +89,16 @@ async function generate(messages:  ChatCompletionMessageParam[], phone: number, 
 		return { gptResponse, chain };
 	} catch (error: any) {
 		console.log('/genChat generate() error: ', error.message);
+		chain
+		generate(messages, phone, chain)
 	}
-	
+}
+
+export async function getGPTNew() {
+	const assistant = await openai.beta.assistants.create({
+		instructions: "",
+		model: "gpt-4-1106-preview",
+	});
 }
 
 export async function saveConversation(role: 'user' | 'assistant' | 'system', message: string, phone: number) {

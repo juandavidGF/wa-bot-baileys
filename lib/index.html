@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    .container {
+      margin: 20px;
+    }
+    .linea {
+      width: 100%;
+      height: 2px; /* Ajusta la altura de la línea según tus necesidades */
+      background: linear-gradient(to right, white, black);
+      -webkit-background-clip: text; /* Aplicar el degradado solo a la línea */
+      background-clip: text; /* Versión estándar de background-clip */
+      color: transparent; /* Hacer la línea transparente */
+    }
+  </style>
+  <title>Degradado en línea</title>
+</head>
+<body>
+  <div class="container">
+    <h1>Hola</h1>
+    <div class="linea"></div>
+  </div>
+</body>
+</html>

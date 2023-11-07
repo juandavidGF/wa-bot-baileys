@@ -1,0 +1,132 @@
+{
+  "options": {
+    "method": "get",
+    "path": "/threads/thread_bDAKSGWvo4VdjA7OKk0jhTkO/runs/run_KvioDfcdyLfqhbeH0H34QUXQ/steps",
+    "query": {},
+    "headers": {
+      "OpenAI-Beta": "assistants=v1"
+    }
+  },
+  "response": {
+    "size": 0,
+    "timeout": 0
+  },
+  "body": {
+    "object": "list",
+    "data": [
+      {
+        "id": "step_L9MBdSNSoSNshmhiXLIOdZcD",
+        "object": "thread.run.step",
+        "created_at": 1699337250,
+        "run_id": "run_KvioDfcdyLfqhbeH0H34QUXQ",
+        "assistant_id": "asst_lVQxnTkHr4ur5iJUCzs4pcro",
+        "thread_id": "thread_bDAKSGWvo4VdjA7OKk0jhTkO",
+        "type": "message_creation",
+        "status": "completed",
+        "cancelled_at": null,
+        "completed_at": 1699337251,
+        "expires_at": null,
+        "failed_at": null,
+        "last_error": null,
+        "step_details": {
+          "type": "message_creation",
+          "message_creation": {
+            "message_id": "msg_OMkdkujrIZqXiPyrzs8NsiBd"
+          }
+        }
+      },
+      {
+        "id": "step_OV2px5QbEEycCEpinKDVcDsI",
+        "object": "thread.run.step",
+        "created_at": 1699337245,
+        "run_id": "run_KvioDfcdyLfqhbeH0H34QUXQ",
+        "assistant_id": "asst_lVQxnTkHr4ur5iJUCzs4pcro",
+        "thread_id": "thread_bDAKSGWvo4VdjA7OKk0jhTkO",
+        "type": "tool_calls",
+        "status": "completed",
+        "cancelled_at": null,
+        "completed_at": 1699337250,
+        "expires_at": null,
+        "failed_at": null,
+        "last_error": null,
+        "step_details": {
+          "type": "tool_calls",
+          "tool_calls": [
+            {
+              "id": "call_CklfX0HVead9UyajqUrxc7Xy",
+              "type": "code_interpreter",
+              "code_interpreter": {
+                "input": "import sympy as sp\r\n\r\n# Define the variable\r\nx = sp.symbols('x')\r\n\r\n# Define the equation\r\nequation = x**2 - 5*x + 6\r\n\r\n# Solve the equation\r\nsolutions = sp.solve(equation, x)\r\nsolutions",
+                "outputs": [
+                  {
+                    "type": "logs",
+                    "logs": "[2, 3]"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "first_id": "step_L9MBdSNSoSNshmhiXLIOdZcD",
+    "last_id": "step_OV2px5QbEEycCEpinKDVcDsI",
+    "has_more": false
+  },
+  "data": [
+    {
+      "id": "step_L9MBdSNSoSNshmhiXLIOdZcD",
+      "object": "thread.run.step",
+      "created_at": 1699337250,
+      "run_id": "run_KvioDfcdyLfqhbeH0H34QUXQ",
+      "assistant_id": "asst_lVQxnTkHr4ur5iJUCzs4pcro",
+      "thread_id": "thread_bDAKSGWvo4VdjA7OKk0jhTkO",
+      "type": "message_creation",
+      "status": "completed",
+      "cancelled_at": null,
+      "completed_at": 1699337251,
+      "expires_at": null,
+      "failed_at": null,
+      "last_error": null,
+      "step_details": {
+        "type": "message_creation",
+        "message_creation": {
+          "message_id": "msg_OMkdkujrIZqXiPyrzs8NsiBd"
+        }
+      }
+    },
+    {
+      "id": "step_OV2px5QbEEycCEpinKDVcDsI",
+      "object": "thread.run.step",
+      "created_at": 1699337245,
+      "run_id": "run_KvioDfcdyLfqhbeH0H34QUXQ",
+      "assistant_id": "asst_lVQxnTkHr4ur5iJUCzs4pcro",
+      "thread_id": "thread_bDAKSGWvo4VdjA7OKk0jhTkO",
+      "type": "tool_calls",
+      "status": "completed",
+      "cancelled_at": null,
+      "completed_at": 1699337250,
+      "expires_at": null,
+      "failed_at": null,
+      "last_error": null,
+      "step_details": {
+        "type": "tool_calls",
+        "tool_calls": [
+          {
+            "id": "call_CklfX0HVead9UyajqUrxc7Xy",
+            "type": "code_interpreter",
+            "code_interpreter": {
+              "input": "import sympy as sp\r\n\r\n# Define the variable\r\nx = sp.symbols('x')\r\n\r\n# Define the equation\r\nequation = x**2 - 5*x + 6\r\n\r\n# Solve the equation\r\nsolutions = sp.solve(equation, x)\r\nsolutions",
+              "outputs": [
+                {
+                  "type": "logs",
+                  "logs": "[2, 3]"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

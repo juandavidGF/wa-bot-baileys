@@ -15,11 +15,10 @@ import saveGenerations from './db/saveGenerations';
 import { DesighBrief } from "./models/logoapp";
 import { ChatCompletionMessageParam } from "openai/resources/chat";
 
-import { PromptTemplate } from "langchain/prompts";
+import { AIMessagePromptTemplate, PromptTemplate } from "langchain/prompts";
 
 import { getTasks, updateTask } from './db/tasks';
 import { Campaign } from "./models/tasks";
-
 
 import { LLMChain } from "langchain/chains";
 
@@ -33,19 +32,20 @@ import {
   SystemMessagePromptTemplate,
 } from "langchain/prompts";
 
-import { ConversationSummaryMemory } from "langchain/memory";
+import { BaseMemory, ConversationSummaryBufferMemory, ConversationSummaryMemory } from "langchain/memory";
+import { AIMessage } from "langchain/dist/schema";
 
 const model = new ChatOpenAI({ temperature: 0.9, verbose: true });
 
-const chatPromptMemory = new ConversationSummaryMemory({
-  llm: new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 }),
-});
+interface chainHistoryInterface {
+  [key: string]: ConversationSummaryBufferMemory | null; // Key is a string, value is an array of Message objects
+}
+const chatPromptMemory = {} as chainHistoryInterface;
 
 interface chainMessages {
-  [key: string]: ConversationChain; // Key is a string, value is an array of Message objects
+  [key: string]: ConversationChain | null; // Key is a string, value is an array of Message objects
 }
 const chainHistory: chainMessages = {} as chainMessages;
-
 
 require('dotenv').config();
 
@@ -147,6 +147,38 @@ async function connectToWhatsApp() {
   // Quizá las campañas deberían crearse independientemente, para permitir una a muchas ... :).
   // Debo revisar según el date, si es default mandarlo, si no a pasado aún esperar :).
 
+
+  async function initCHistory(prompts: any, senderJidLocal: string) {
+
+    chatPromptMemory[senderJidLocal] = new ConversationSummaryBufferMemory({
+      llm: new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 }),
+      maxTokenLimit: 10,
+    });
+
+
+    const sysPrompt = prompts.map((p: any) => {
+      if(p.role === 'system') return SystemMessagePromptTemplate.fromTemplate(p.content);
+      else if(p.role === 'assistant') return AIMessagePromptTemplate.fromTemplate(p.content);
+      else console.log('err, no role initCHistory');
+    });
+
+    const initPrompts = [
+      ...sysPrompt,
+      new MessagesPlaceholder("history"),
+      HumanMessagePromptTemplate.fromTemplate("{input}"),
+    ]
+
+    const chatPrompt = ChatPromptTemplate.fromMessages(initPrompts);
+    
+    const chain = new ConversationChain({
+      llm: model,
+      memory: chatPromptMemory[senderJidLocal] as ConversationSummaryBufferMemory,
+      prompt: chatPrompt,
+    });
+
+    chainHistory[senderJidLocal] = chain;
+  }
+
   // Y acá no se supone que debe solo ejecutar una ??
   async function jobTasksPhone (tasksP: Campaign[]) {
     if (!!tasksP && tasksP.length > 0) {
@@ -173,6 +205,12 @@ async function connectToWhatsApp() {
             {role: 'system', content: task.prompt as string},
             {role: 'assistant', content: task.firstMessage as string}
           ];
+
+          await initCHistory([
+            {role: 'system', content: task.prompt as string},
+            {role: 'assistant', content: task.firstMessage as string}
+          ], senderJidLocal)
+
           saveConversation('system', task.prompt as string, Number(task.phone));
           saveConversation('assistant', task.firstMessage as string, Number(task.phone));
           await updateTask(taskVs, Number(task.phone));
@@ -226,6 +264,7 @@ async function connectToWhatsApp() {
         source: '/stop userMessage',
       }
       mHistory[senderJid] = [];
+      chainHistory[senderJid] = null;
 
       //* Debería aca borrar el historial?
       console.log('upsert /stop');
@@ -308,6 +347,11 @@ async function connectToWhatsApp() {
         {role: 'system', content: task.prompt as string},
         {role: 'assistant', content: task.firstMessage as string}
       ];
+
+      await initCHistory([
+        {role: 'system', content: task.prompt as string},
+        {role: 'assistant', content: task.firstMessage as string}
+      ], senderJid)
 
       saveConversation('system', task.prompt as string, Number(task.phone));
       saveConversation('assistant', task.firstMessage as string, Number(task.phone));
@@ -449,7 +493,8 @@ async function connectToWhatsApp() {
         chain: flowTaskChain,
         messages: mHistory[senderJid],
       };
-      let gptResponse = await genChat(payload, Number(senderPhone)) as string;
+      let { gptResponse, chain } = await genChat(payload, Number(senderPhone), chainHistory[senderJid]);
+      chainHistory[senderJid] = chain;
 
       // Si acá comienza con "/", entonces el nuevo flow va a tener esa palabra,
       // Tengo que extraer la palabra con /
@@ -632,25 +677,10 @@ async function connectToWhatsApp() {
 
 
       if(!chainHistory[senderJid]) {
-
-        const chatPrompt = ChatPromptTemplate.fromMessages([
-          SystemMessagePromptTemplate.fromTemplate(
-            "The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."
-          ),
-          SystemMessagePromptTemplate.fromTemplate(
-            defaultPrompt().content as string
-          ),
-          new MessagesPlaceholder("history"),
-          HumanMessagePromptTemplate.fromTemplate("{input}"),
-        ]);
-        
-        const chain = new ConversationChain({
-          llm: model,
-          memory: chatPromptMemory,
-          prompt: chatPrompt,
-        });
-
-        chainHistory[senderJid] = chain;
+        await initCHistory([
+          {role: 'system', content: "The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."},
+          {role: 'system', content: defaultPrompt().content as string}
+        ], senderJid)
       }
 
       // Actualizar flujo acá.

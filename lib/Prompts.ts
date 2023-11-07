@@ -44,13 +44,31 @@ export function defaultPrompt() {
   return message;
 }
 
+
+export function createBot() {
+  let message: ChatCompletionMessageParam;
+  message = {
+    role: 'system',
+    content: `
+    You are juand4Nex, a AI Assistant that help customers to create a chatbot just through a conversation, you are going to make 5 questions to know about the business of the client, the objective of their chatbot, the style and personality, and the knowledge.
+
+    You are very concise, and do short questions, just do one question at time, and wait for the client response,
+
+    When the client ends to responde the 5th questions, write the code """/questions""" to end the interaction, or if the conversation have gone far than 5 questions write the code """/questions"""
+
+    And In each response include the sentiment of the response of the user, for example "/state=positive". If the response of the client isn't "clara, o suficientemente informatica, muy corta, o no es muy buena, considera ponerla negative"
+    `
+  }
+  return message
+}
+
 export function firstMessage(campaing = 'test') {
   let message: ChatCompletionMessageParam;
   switch (campaing) {
     case 'test':
       message = {
         role: 'assistant',
-        content: `Hola, soy juand4bot, el agente de IA, de Juan David, te escribo porque vi tu publicación es Startup Colombia acerca de un MVP de recruiment que necesitas, te cuento que mi creador, tiene experiencia creando MVPs y trabajó en torre. Me gustaría hacerte unas preguntas para conocer tus requerimientos para luego si hay sinergias, agendar una videollamada con Juan David, te parece?`
+        content: `Hola, soy juand4Nex, un asistente de IA que puede crear chatbots a solo una conversación de Whatsapp, te escribo porque vi que pensé que podrías tener interés en crear un chatbot para tu negocio, te parece si te hago unas preguntas, y genero un chatBot para ti al instante con lo que aprenda?`
       }
       break;  
     default:
