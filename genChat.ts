@@ -34,14 +34,14 @@ type RequestPayloadChat = {
 };
 
 export async function genChat(payload: any, phone: number, chain: any = null) {
-	console.log('/gC flag1')
+	console.log('/gChat flag1');
 	let response: any = ''
 	switch (payload.chain) {
 		case "logoChain":
 			response = await getOneByOne(payload, phone);
 			break;
 		case "jobTaskPhone":
-			response = await generate(payload.messages, phone, chain);
+			response = await generateN(payload.messages, phone, chain);
 			break;
 		case "jobTaskCode":
 			response = await generate(payload.messages, phone, chain);
@@ -59,6 +59,39 @@ export async function genChat(payload: any, phone: number, chain: any = null) {
 	// const response = mockTextAssets()
   // getByFunctionCalling(payload)
   return response
+}
+
+async function generateN(messages:  ChatCompletionMessageParam[], phone: number, chain: any = null) {
+	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
+	// console.log('getMVPRecluiment#messagess: ', messages);
+	console.log('/gC generate flag2');
+	let lastMessage = messages[messages.length - 1]?.content as string;
+	if(!lastMessage) throw Error('err last Message, !LastMesssage');
+	await saveConversation('user', lastMessage, phone);
+
+	try {
+		console.log('/gC before chain.call generate flag2', lastMessage);
+		// let gptResponse = await getGPTNew();
+		let gptResponse =  await chain.predict({ input: lastMessage });
+		// console.log('/genChat gptResponse: ', gptResponse);
+		// const gptResponse = (await openai.chat.completions.create({
+		// 	messages: messages,
+		// 	model: 'gpt-3.5-turbo',
+		// })).choices[0].message.content;
+		if(gptResponse == null) {
+			throw Error('We didnt get a response getMVPRecluiment');
+		}
+	
+		// error.code "context_length_exceeded" task de resumir. Y no parar proceso, solo decir err si alcaso.
+		// O utilizar otro modelo más grande.
+	
+		await saveConversation('assistant', gptResponse, phone);
+		return { gptResponse, chain };
+	} catch (error: any) {
+		console.log('/genChat generate() error: ', error.message);
+		chain
+		generate(messages, phone, chain)
+	}
 }
 
 async function generate(messages:  ChatCompletionMessageParam[], phone: number, chain: any = null) {

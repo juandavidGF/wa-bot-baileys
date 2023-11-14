@@ -53,29 +53,28 @@ async function listAssistants() {
 }
 
 async function createThread() {
-  // const emptyThread = await openai.beta.threads.create({});
-  // console.log(emptyThread);
+  const emptyThread = await openai.beta.threads.create({});
+  console.log(emptyThread);
   // thread_H9UCYWPlbT7bYWnOHEROpceK
 
   // console.log(myThread);
 
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+  // const rl = readline.createInterface({
+  //   input: process.stdin,
+  //   output: process.stdout,
+  // });
 
-  const getUserInput = async () => {
-    rl.question('You: ', async (input: string) => {
+  // const getUserInput = async () => {
+  //   rl.question('You: ', async (input: string) => {
       
-      
-      getUserInput(); // Continue to listen for user input
-    });
-  };
+  //     getUserInput(); // Continue to listen for user input
+  //   });
+  // };
 
-  getUserInput(); // Start the conversation
+  // getUserInput(); // Start the conversation
 }
-// const THREAD = 'thread_H9UCYWPlbT7bYWnOHEROpceK';
+const THREAD = 'thread_H9UCYWPlbT7bYWnOHEROpceK';
 
 
 async function modifyThread() {
@@ -118,6 +117,37 @@ async function retrieveMessage() {
   console.log(message.content[0]);
 }
 
+async function listMessages(THREAD: string) {
+  const threadMessages = await openai.beta.threads.messages.list(
+    THREAD
+  );
+
+  const messages = threadMessages.data.map(m => {
+    if(m.content[0].type === 'text') {
+      return {
+        role: m.role,
+        value: m.content[0].text.value
+      }
+    }
+  });
+
+  console.log(messages);
+
+  // for(let m of threadMessages.data) {
+  //   // console.log(m);
+  //   // messages.push({
+  //   //   role: m.role,
+  //   //   content: m.content
+  //   // })
+  //   // console.log(m.role)
+    
+  //   if(m.content[0].type === 'text') {
+  //     console.log(m.content[0].text.value);
+  //   }
+  // }
+  
+}
+
 async function createRun() {
   const run = await openai.beta.threads.runs.create(
     THREAD,
@@ -140,13 +170,11 @@ async function createThreadAndRun() {
   });
 
   console.log(run);
-  // run_KvioDfcdyLfqhbeH0H34QUXQ
-  // thread_bDAKSGWvo4VdjA7OKk0jhTkO
 }
 let RUN = "run_KvioDfcdyLfqhbeH0H34QUXQ";
-let THREAD = "thread_bDAKSGWvo4VdjA7OKk0jhTkO"
+// let THREAD = "thread_bDAKSGWvo4VdjA7OKk0jhTkO"
 
-async function retrieveRun() {
+async function retrieveRun(THREAD: string, RUN: string) {
   const run = await openai.beta.threads.runs.retrieve(
     THREAD,
     RUN,
@@ -155,7 +183,7 @@ async function retrieveRun() {
   console.log(run);
 }
 
-async function listRuns() {
+async function listThread(THREAD: string) {
   const runs = await openai.beta.threads.runs.list(
     THREAD
   );
@@ -164,15 +192,18 @@ async function listRuns() {
 }
 
 
-async function listRunSteps() {
+async function listRunSteps(THREAD: string, RUN: string) {
   const runStep = await openai.beta.threads.runs.steps.list(
     THREAD,
     RUN,
   );
 
+  console.log(runStep);
+
   for(let i in runStep.data) {
     const stepDetail = runStep.data[i].step_details
     const type = stepDetail.type;
+    console.log(JSON.stringify(stepDetail));
     if(type === 'tool_calls') {
       const toolCalls = stepDetail.tool_calls[0];
       if(toolCalls.type == 'code_interpreter') {
@@ -214,4 +245,8 @@ const retrieveRunSteps = async (ids: string[]) => {
   return Promise.all(promises);
 };
 
-listRunSteps();
+
+const ASSISSTANT_MATH = "asst_lVQxnTkHr4ur5iJUCzs4pcro";
+const THREAD_MATH = "thread_u6rQdszJSAQtJIQxyExXxASE";
+const RUN_MATH = "run_M7q6jF1kZbzcXIH8FiYodMAT";
+listRunSteps(THREAD_MATH, RUN_MATH);
