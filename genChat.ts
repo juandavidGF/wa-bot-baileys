@@ -59,36 +59,38 @@ export async function genChat(payload: any, phone: number) {
 
 async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: number) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
-	// console.log('getMVPRecluiment#messagess: ', messages);
-	let lastMessage = messages[messages.length - 1]?.content;
+	console.log('getMVPRecluiment#messagess: ', messages);
+	let lastMessage = messages[messages.length - 1]?.content as string;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone);
 
-	let chatHistory = ""
+	// let chatHistory = ""
 
-	for(const m in messages) {
-		messages[m].role
-		messages[m].content
+	// for(const m in messages) {
+	// 	messages[m].role
+	// 	messages[m].content
 		
-		chatHistory.concat(" role: ", messages[m].role, " content: ", messages[m].content as string);
-	}
+	// 	chatHistory.concat(" role: ", messages[m].role, " content: ", messages[m].content as string);
+	// }
 
-	const summary = (await openai.chat.completions.create({
-		messages: [{role: 'system', content: `Make a short summary of this conversation between one AI and Human: ${chatHistory} /n`}],
-		model: 'gpt-3.5-turbo',
-	})).choices[0].message.content
+	// const summary = (await openai.chat.completions.create({
+	// 	messages: [{role: 'system', content: `Make a short summary of this conversation between one AI and Human: ${chatHistory} /n`}],
+	// 	model: 'gpt-3.5-turbo',
+	// })).choices[0].message.content;
 
-	summary?.concat("AI:");
+	// summary?.concat("AI:");
 
 	try {
 		const gptResponseFull = await openai.chat.completions.create({
-			messages: [{role: 'system', content: summary}],
+			messages: messages,
 			model: 'gpt-3.5-turbo',
 		});
 		const gptResponse = gptResponseFull.choices[0].message.content;
-		const totalTokens = gptResponseFull.usage?.total_tokens 
-		if(!!totalTokens && totalTokens > 4000/3) {
+		const totalTokens = gptResponseFull.usage?.total_tokens
+		let flush = false;
+		if(!!totalTokens && totalTokens > 4000) {
 			console.log('totalTokens > 4000/3: ', totalTokens);
+			flush = true;
 		}
 		if(gptResponse == null) {
 			throw Error('We didnt get a response getMVPRecluiment');
@@ -98,7 +100,7 @@ async function getMVPRecluiment(messages:  ChatCompletionMessageParam[], phone: 
 		// O utilizar otro modelo más grande.
 	
 		await saveConversation('assistant', gptResponse, phone);
-		return {gptResponse, summary};
+		return {gptResponse, summary: 'none', flush: flush};
 	} catch (error: any) {
 		if(error.code === 'context_length_exceeded') {
 			console.log('context_length_exceeded')

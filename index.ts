@@ -23,7 +23,7 @@ require('dotenv').config();
 const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER;
 const JD_NUMBER = process.env.JD_NUMBER;
 // const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
-const MVP_RECLUIMENT_CLIENT = JD_NUMBER;
+const MVP_RECLUIMENT_CLIENT = JUAND4BOT_NUMBER;
 const respondedToMessages = new Set();
 const BASE_GEN = process.env.BASE_GEN;
 
@@ -72,7 +72,7 @@ type textAssets = {
 }
 
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot');
+  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juanGranados');
   logger.level = 'trace';
   
   const sock = makeWASocket({
@@ -121,7 +121,7 @@ async function connectToWhatsApp() {
       for(const taskVs of tasksP) {
         const task = taskVs.versions[0]
         // Acá debo ver cuáles son los únicos que estan habilitados.
-        if(!!task && !!task?.phone && task?.phone == 573143035220 ) {
+        if(!!task && !!task?.phone && task?.phone == Number(JUAND4BOT_NUMBER) ) {
           console.log('onjobTask for..of', task);
           const firstTask = task;
           const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
@@ -181,6 +181,8 @@ async function connectToWhatsApp() {
     const messageConversation = receivedMessage.message?.conversation
     const messageExtended = receivedMessage.message?.extendedTextMessage?.text
     const messageUser = !!messageConversation ? messageConversation : messageExtended;
+
+    console.log(messageUser);
 
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
 
@@ -413,7 +415,12 @@ async function connectToWhatsApp() {
         messages: mHistory[senderJid],
       };
       // Acá simplemente sigue la conversación, entonces debo obtener el numéro asociado.
-      let gptResponse = await genChat(payload, Number(senderPhone));
+      let {gptResponse, flush } = await genChat(payload, Number(senderPhone));
+      if(flush) {
+        mHistory[senderJid].pop();
+        mHistory[senderJid].pop();
+        mHistory[senderJid].pop();
+      }
       if (gptResponse.includes("/done")) {
         // Creo que esto no lo guarda ... :think
         const regex = new RegExp(`\\/done.*`);
@@ -472,7 +479,7 @@ async function connectToWhatsApp() {
         mHistory[senderJid] = [defaultPrompt(), firstMessage()];
       }
       mHistory[senderJid].push({role: 'user', content: messageUser as string});
-      // console.log(mHistory, mHistory[senderJid].length);
+      console.log(mHistory, mHistory[senderJid].length);
       
       let payload: RequestPayloadChat = {
         chain: 'default',
@@ -485,9 +492,12 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].state = 'generating';
         senderFlows[senderJid].source = 'generating default'
         console.log('default() state is generating');
-        let {gptResponse, summary } = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
-        mHistory[senderJid].slice(2 + 1)
-        mHistory[senderJid].push({role: 'system', content: summary});
+        let { gptResponse, summary, flush } = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
+        if(flush) {
+          mHistory[senderJid].pop();
+          mHistory[senderJid].pop();
+          mHistory[senderJid].pop();
+        }
 
         if (gptResponse.includes("/done")) {
           // Creo que esto no lo guarda ... :think
