@@ -63,6 +63,8 @@ interface SenderFlowState {
   skill?: string,
   source?: string;
   task?: any;
+  thread?: string;
+  assistant?: string;
 }
 
 interface SenderFlows {
@@ -493,6 +495,8 @@ async function connectToWhatsApp() {
         chain: flowTaskChain,
         messages: mHistory[senderJid],
       };
+      
+      // .
       let { gptResponse, chain } = await genChat(payload, Number(senderPhone), chainHistory[senderJid]);
       chainHistory[senderJid] = chain;
 
