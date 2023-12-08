@@ -29,6 +29,12 @@ interface Code {
 	active: boolean,
 }
 
+export interface allowedPhones {
+	phone: string;
+	sent?: boolean;
+	date?: number;
+}
+
 export interface Version {
 	name: string,
 	description?: string,
@@ -49,6 +55,7 @@ import { ObjectId } from 'mongodb';
 export interface Campaign {
 	_id?: ObjectId,
 	uuid?: string,
+	assistant?: string,
   email: string,
 	versions: Version[]
 }

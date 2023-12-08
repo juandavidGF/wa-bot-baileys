@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { delay } from "../utils/delay";
+import { defaultPrompt } from "../lib/Prompts"
 const readline = require('readline');
 const fs = require('fs');
 
@@ -11,14 +12,15 @@ const C_ASSISTANT = false;
 
 
 async function createAssistant(
-  name="Math Tutor", 
+  name="juand4bot",
   instructions="You are a personal math tutor. Write and run code to answer math questions.",
   ) {
   const assistant = await openai.beta.assistants.create({
     name,
-    instructions,
-    tools: [{ type: "code_interpreter" }],
-    model: "gpt-4-1106-preview"
+    instructions: defaultPrompt().content,
+    // tools: [{ type: "code_interpreter" }],
+    model: "gpt-3.5-turbo-1106"
+    // model: 'gpt-4-1106-preview'
   });
   return assistant;
 }
@@ -26,15 +28,14 @@ async function createAssistant(
 
 async function main() {
   // create Assistant or call some
-  // const assistant = await createAssistant();
-  // const aId = assistant.id;
-  const aId = 'asst_lVQxnTkHr4ur5iJUCzs4pcro';
+  const assistant = await createAssistant();
+  const aId = assistant.id;
+  // const aId = 'asst_lVQxnTkHr4ur5iJUCzs4pcro';
   // create Thread
-  // const thread = await openai.beta.threads.create();
-  const thread = {
-    id: "thread_u6rQdszJSAQtJIQxyExXxASE"
-  }
-  
+  const thread = await openai.beta.threads.create();
+  // const thread = {
+  //   id: "thread_u6rQdszJSAQtJIQxyExXxASE"
+  // }
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -59,11 +60,15 @@ async function main() {
         }
       );
 
+      console.log('run.status', run.id, run.status);
+
       let runRetrieve = await openai.beta.threads.runs.retrieve(
         thread.id,
         run.id
       );
-      
+
+      console.log('run.status: ', run.status);
+      console.log('runRetrieve.status: ', runRetrieve.status);
 
       do {
         await delay(500);
@@ -71,7 +76,11 @@ async function main() {
           thread.id,
           run.id
         );
+        console.log(runRetrieve.status);
+        console.log('run.status: ', run.status);
+        if(runRetrieve.status === 'failed') break;
       } while(runRetrieve.status !== 'completed');
+      console.log('run.status after: ', run.status);
 
       const threadMessages = await openai.beta.threads.messages.list(
         thread.id

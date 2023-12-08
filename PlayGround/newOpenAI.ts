@@ -100,7 +100,7 @@ async function retrieveThread() {
 async function createMessage() {
   const threadMessages = await openai.beta.threads.messages.create(
     THREAD,
-    { role: "user", content: "I need to solve the equation `3x + 11 = 14`. Can you help me?" }
+    { role: 'user', content: "I need to solve the equation `3x + 11 = 14`. Can you help me?" }
   );
 
   console.log(threadMessages);
@@ -249,4 +249,5 @@ const retrieveRunSteps = async (ids: string[]) => {
 const ASSISSTANT_MATH = "asst_lVQxnTkHr4ur5iJUCzs4pcro";
 const THREAD_MATH = "thread_u6rQdszJSAQtJIQxyExXxASE";
 const RUN_MATH = "run_M7q6jF1kZbzcXIH8FiYodMAT";
-listRunSteps(THREAD_MATH, RUN_MATH);
+// listRunSteps(THREAD_MATH, RUN_MATH);
+createMessage()

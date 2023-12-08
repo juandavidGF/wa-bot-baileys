@@ -1,4 +1,4 @@
-import makeWASocket, { 
+import makeWASocket, {
   DisconnectReason,
   makeCacheableSignalKeyStore,
   useMultiFileAuthState,
@@ -18,11 +18,11 @@ import { ChatCompletionMessageParam } from "openai/resources/chat";
 import { AIMessagePromptTemplate, PromptTemplate } from "langchain/prompts";
 
 import { getTasks, updateTask } from './db/tasks';
-import { Campaign } from "./models/tasks";
+import { Campaign, Version, allowedPhones } from "./models/tasks";
 
 import { LLMChain } from "langchain/chains";
 
-import { OpenAI } from "langchain/llms/openai";
+// import { OpenAI } from "langchain/llms/openai";
 import { ChatOpenAI } from "langchain/chat_models/openai";
 import { ConversationChain } from "langchain/chains";
 import {
@@ -31,6 +31,14 @@ import {
   MessagesPlaceholder,
   SystemMessagePromptTemplate,
 } from "langchain/prompts";
+
+
+import OpenAI from "openai";
+
+require('dotenv').config();
+
+const openai = new OpenAI();
+
 
 import { BaseMemory, ConversationSummaryBufferMemory, ConversationSummaryMemory } from "langchain/memory";
 import { AIMessage } from "langchain/dist/schema";
@@ -51,10 +59,13 @@ require('dotenv').config();
 
 const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER;
 const JD_NUMBER = process.env.JD_NUMBER;
+const OWNER_NUMBER = JD_NUMBER;
+const AUTH_BAILEYS = OWNER_NUMBER === JD_NUMBER ? 'baileys_auth_info_juanG' : 'baileys_auth_info_juand4bot';
 // const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
-const MVP_RECLUIMENT_CLIENT = JD_NUMBER;
+const MVP_RECLUIMENT_CLIENT = JUAND4BOT_NUMBER;
 const respondedToMessages = new Set();
 const BASE_GEN = process.env.BASE_GEN;
+
 
 // Quizá también debería agregar una para la app en la que esta, así le doy una prioridad.
 interface SenderFlowState {
@@ -62,9 +73,9 @@ interface SenderFlowState {
   state: string;
   skill?: string,
   source?: string;
-  task?: any;
-  thread?: string;
-  assistant?: string;
+  campaign?: any;
+  thread?: any;
+  assistant?: any;
 }
 
 interface SenderFlows {
@@ -103,8 +114,12 @@ type textAssets = {
   whyLogo: string | null
 }
 
+const authPhones: allowedPhones[] = [
+  { phone: JUAND4BOT_NUMBER as string },
+]
+
 async function connectToWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info_juand4bot');
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_BAILEYS);
   logger.level = 'trace';
   
   const sock = makeWASocket({
@@ -149,9 +164,7 @@ async function connectToWhatsApp() {
   // Quizá las campañas deberían crearse independientemente, para permitir una a muchas ... :).
   // Debo revisar según el date, si es default mandarlo, si no a pasado aún esperar :).
 
-
   async function initCHistory(prompts: any, senderJidLocal: string) {
-
     chatPromptMemory[senderJidLocal] = new ConversationSummaryBufferMemory({
       llm: new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 }),
       maxTokenLimit: 10,
@@ -181,13 +194,47 @@ async function connectToWhatsApp() {
     chainHistory[senderJidLocal] = chain;
   }
 
+  async function createAssistant(
+    instruction: string, 
+    name: string = "newAssistant", 
+    campaign: Campaign | null = null, 
+    model: "gpt-4-1106-preview" | "gpt-3.5-turbo-1106" = "gpt-3.5-turbo-1106"
+  ) {
+    // assistant exist?
+    if(campaign?.assistant) {
+      return campaign.assistant;
+    }
+    const myAssistant = await openai.beta.assistants.create({
+      instructions: instruction,
+      name: name,
+      model: model,
+    });
+
+    return myAssistant;
+  }
+
+  async function createThread() {
+    const emptyThread = await openai.beta.threads.create();
+    return emptyThread;
+  }
+
+  async function createMessage(thread: string, role: 'user' | 'assistant' = 'user', message: string) {
+    const threadMessages = await openai.beta.threads.messages.create(
+      thread,
+      { role: role as any, content: message }
+    );
+    
+    return threadMessages;
+  }
+  
   // Y acá no se supone que debe solo ejecutar una ??
   async function jobTasksPhone (tasksP: Campaign[]) {
     if (!!tasksP && tasksP.length > 0) {
       for(const taskVs of tasksP) {
         const task = taskVs.versions[0]
         // Acá debo ver cuáles son los únicos que estan habilitados.
-        if(!!task && !!task?.phone && task?.phone == 573143035220 ) {
+        // Revisar lógica, una es enviar a los números definidos en la campaña?, y luego a cierta cantidad por vez para evitar?.
+        if(!!task && !!task?.phone && authPhones.some(item => Number(item.phone) == task.phone)) {
           console.log('onjobTask for..of', task);
           const firstTask = task;
           const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
@@ -208,14 +255,23 @@ async function connectToWhatsApp() {
             {role: 'assistant', content: task.firstMessage as string}
           ];
 
-          await initCHistory([
-            {role: 'system', content: task.prompt as string},
-            {role: 'assistant', content: task.firstMessage as string}
-          ], senderJidLocal)
+          // await initCHistory([
+          //   {role: 'system', content: task.prompt as string},
+          //   {role: 'assistant', content: task.firstMessage as string}
+          // ], senderJidLocal)
 
           saveConversation('system', task.prompt as string, Number(task.phone));
           saveConversation('assistant', task.firstMessage as string, Number(task.phone));
           await updateTask(taskVs, Number(task.phone));
+
+          const myAssistant = await createAssistant(task.prompt, task.name, taskVs);
+          senderFlows[senderJidLocal].assistant = myAssistant;
+
+          const thread = await createThread();
+          senderFlows[senderJidLocal].thread = thread;
+
+          // const messsage = await createMessage(thread.id, 'assistant', task.firstMessage as string);
+
           await delay(1_500);
           senderFlows[senderJidLocal].state = 'init';
           respondedToMessages.delete(senderJidLocal);
@@ -256,7 +312,7 @@ async function connectToWhatsApp() {
 
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
 
-    console.log('upsert senderFlows[senderJid]: ', senderFlows[senderJid]);
+    console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
 
     //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
     if(messageUser?.includes("/stop")) {
@@ -264,9 +320,12 @@ async function connectToWhatsApp() {
         flow: 'default',
         state: 'init',
         source: '/stop userMessage',
+        thread: undefined,
+        assistant: undefined
       }
-      mHistory[senderJid] = [];
+      delete mHistory[senderJid];
       chainHistory[senderJid] = null;
+      respondedToMessages.delete(senderJid);
 
       //* Debería aca borrar el historial?
       console.log('upsert /stop');
@@ -275,11 +334,11 @@ async function connectToWhatsApp() {
 
     // if available !! <- guardar esa info en la DB y luego en alguna estructura, porque pueden ser muchos !!
     if (!senderFlows[senderJid]) {
-      console.log('upsert !senderFlows[senderJid]');
+      console.log('!senderFlows[senderJid]');
       senderFlows[senderJid] = {
         flow: 'default',
         state: 'init',
-        source: 'constructor()'
+        source: 'constructor()',
       }
     }
 
@@ -325,19 +384,27 @@ async function connectToWhatsApp() {
     }
 
     async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
+      console.log('jobTaskCode')
       // debo eliminar el responded para ese número, o más bien, activarlo para bloquearlo acá.
       // Debo actualizar o crear el senderFlow a este code ...
       // Luego de so debo ejecutar el prompt, y el firtsMessage -> Esto va a ser curioso.
+      const task = campaign.versions[0];
+      // if is allowed number?
+      // const isValidPhone =  !!task && !!task?.phone && authPhones.some(item => Number(item.phone) == task.phone)
+      const isValidPhone = authPhones.some(item => item.phone === senderPhone)
+      console.log('isValidePhone', isValidPhone);
+      if(!isValidPhone) return;
+
       senderFlows[senderJid] = {
-        flow: 'jobCode',
+        flow: 'jobTaskCode',
         state: 'generating',
-        task: campaign,
-        source: 'jobTaskCode'
+        campaign: campaign,
+        source: 'jobTaskCode',
       }
       console.log('jobTaskCode');
       respondedToMessages.add(senderJid)
 
-      const task = campaign.versions[0];
+      
 
       if(task.firstMessage) await sock.sendMessage(senderJid, {
         text: task.firstMessage,
@@ -349,14 +416,24 @@ async function connectToWhatsApp() {
         {role: 'system', content: task.prompt as string},
         {role: 'assistant', content: task.firstMessage as string}
       ];
-
-      await initCHistory([
-        {role: 'system', content: task.prompt as string},
-        {role: 'assistant', content: task.firstMessage as string}
-      ], senderJid)
-
+      
+      // await initCHistory([
+      //   {role: 'system', content: task.prompt as string},
+      //   {role: 'assistant', content: task.firstMessage as string}
+      // ], senderJid)
+      
       saveConversation('system', task.prompt as string, Number(task.phone));
       saveConversation('assistant', task.firstMessage as string, Number(task.phone));
+      
+      const myAssistant = await createAssistant(task.prompt, task.name, campaign);
+      senderFlows[senderJid].assistant = myAssistant;
+      
+      const thread = await createThread();
+      senderFlows[senderJid].thread = thread;
+      
+      // Add first message.
+      // const messsage = await createMessage(thread.id, 'assistant', task.firstMessage as string);
+
       //* Debería update según alguna politica?, número máximo ...
       // await updateTask(taskVs, Number(task.phone));
       await delay(1_500);
@@ -410,7 +487,7 @@ async function connectToWhatsApp() {
           }
         };
         try {
-          textAssets = await genChat(payload, Number(JD_NUMBER));
+          textAssets = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
           console.log('index#textAssets (response)', textAssets)
         } catch (error) {
           //Debo hacer que se genere error, y si eso pasa entonces, volverla a llamar máximo 3 veces ...
@@ -477,29 +554,48 @@ async function connectToWhatsApp() {
     // Caso phoneJob
     if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
     senderFlows[senderJid].state === 'init'
-    ) jobTask('jobTaskPhone', senderJid, senderFlows[senderJid].task);
+    ) jobTask('jobTaskPhone', senderJid, senderFlows[senderJid].campaign);
     
     // Caso jobCodes
-    if(senderFlows[senderJid].flow === 'jobCode' &&
+    if(senderFlows[senderJid].flow === 'jobTaskCode' &&
     senderFlows[senderJid].state === 'init'
-    ) jobTask('jobTaskCode', senderJid, senderFlows[senderJid].task);
+    ) jobTask('jobTaskCode', senderJid, senderFlows[senderJid].campaign);
 
-    async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', senderJid: string, task?: Campaign) {
+    async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', senderJid: string, campaign?: Campaign) {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
       senderFlows[senderJid].source = 'jobTask';
 
-      mHistory[senderJid].push({role: 'user', content: messageUser as string})
+      const task = campaign?.versions[0];
+
+      mHistory[senderJid].push({role: 'user', content: messageUser as string});
 
       let payload: RequestPayloadChat = {
         chain: flowTaskChain,
         messages: mHistory[senderJid],
       };
       
-      // .
-      let { gptResponse, chain } = await genChat(payload, Number(senderPhone), chainHistory[senderJid]);
-      chainHistory[senderJid] = chain;
+      // create thread
+      // create message
+      // run
+      // retrieve
 
+      // const myAssistant = await createAssistant(defaultPrompt().content as string, 'default')
+      // senderFlows[senderJid].assistant = myAssistant;
+      // senderFlows[senderJid].thread = await createThread();
+      console.log('xxx jobTask senderFlows[senderJid]: ', senderFlows[senderJid]);
+      console.log('xxx JobTask thread.id .assistant.id');
+      console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistant.id);
+
+      let { gptResponse, chain } = await genChat(
+        payload,
+        Number(senderPhone), 
+        null,
+        senderFlows[senderJid].thread.id,
+        senderFlows[senderJid].assistant.id
+      );
+      chainHistory[senderJid] = chain;
+      
       // Si acá comienza con "/", entonces el nuevo flow va a tener esa palabra,
       // Tengo que extraer la palabra con /
       // Y entonces se la asigno a flow, de modo que bueno, ese flow debe tener un prompt, o un job asociado,
@@ -510,8 +606,7 @@ async function connectToWhatsApp() {
       // Debo entonces tener un type (jobPhone, Code o Sys),
       // Y según el que sea, debo entrar a el,
 
-
-      console.log('jobTask() gptResponse: ', gptResponse, task?.versions[0]?.nxCode, gptResponse.includes(task?.versions[0]?.nxCode as string));
+      console.log('jobTask() gptResponse: ', gptResponse, task?.nxCode, gptResponse.includes(task?.nxCode as string));
       
       if (gptResponse.includes("/done")) {
         // Creo que esto no lo guarda ... :think
@@ -522,22 +617,22 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].flow = 'done'
         senderFlows[senderJid].state = 'init'
         senderFlows[senderJid].source = '/done default'
-      } else if(task?.versions[0]?.nxCode && gptResponse.includes(task?.versions[0]?.nxCode)) {
-        console.log('jobTask() includes nxCode ', task?.versions[0]?.nxCode);
-        const skill = task.versions[0].nxCode;
+      } else if(task?.nxCode && gptResponse.includes(task?.nxCode)) {
+        console.log('jobTask() includes nxCode ', task?.nxCode);
+        const skill = task.nxCode;
         let isSkill = false;
-
+        
         for (const codeKey in activeCodes) {
           if (activeCodes.hasOwnProperty(codeKey)) {
             if(skill === codeKey) {
               console.log(`skills ${skill} is === to codeKey ${codeKey}`);
               isSkill = true;
               console.log('codeKey');
-              const campaign: Campaign = activeCodes[codeKey];
+              const newCampaign: Campaign = activeCodes[codeKey];
               console.log('Campaign:', campaign);
               // Acá se que existe un mensaje para activar un nuevo skill, tengo un history, Y se lo debo pasar a
-              if(campaign.versions[0].type === 'jobSys') {
-                jobSys(skill, senderJid, campaign);
+              if(newCampaign.versions[0].type === 'jobSys') {
+                jobSys(skill, senderJid, newCampaign);
               } else {
                 // Lo que creo es que acá se va a repetir, porque llama a esta misma función, y agrega el messageUser
                 jobTask('jobChain', senderJid, campaign);
@@ -576,44 +671,63 @@ async function connectToWhatsApp() {
       // En este caso solo debo agregarle a mHistory el nuevo sysPrompt, y entonces esperar la respuesta
       // Esa respuesta va a conformar el sys de el nuevo jobTask, que ese si va a responderle al usuario, :)
       console.log('jobSys');
-      senderFlows[senderJid].flow = 'jobSys'
+      senderFlows[senderJid].flow = 'jobSys';
       senderFlows[senderJid].state = 'generating';
       senderFlows[senderJid].source = 'jobSys';
+      senderFlows[senderJid].campaign = campaign;
+      senderFlows[senderJid].skill = skill;
       
       const sysPrompt = campaign.versions[0].prompt;
       mHistory[senderJid].push({role: 'system', content: sysPrompt});
-
+      
       const payloadSys: RequestPayloadChat = {
         chain: 'jobTaskSys',
         messages: mHistory[senderJid],
       };
-
+      
       const gptResponseSys = await genChat(payloadSys, Number(senderPhone));
-
+      
       mHistory[senderJid] = [];
-      mHistory[senderJid].push({ role: 'system', content: gptResponseSys });
-
-      console.log('gptResponseSys: ', gptResponseSys);
-
+      mHistory[senderJid].push({ role: 'system', content: gptResponseSys.gptResponse });
+      
+      console.log('gptResponseSys: ', gptResponseSys.gptResponse);
+      
       const payload: RequestPayloadChat = {
-        chain: 'jobTaskSys',
+        chain: 'jobTaskCode',
         messages: mHistory[senderJid],
       };
 
-      const gptResponse = await genChat(payload, Number(senderPhone));
+      const newAssistant = await createAssistant(gptResponseSys.gptResponse, 'newBot');
+      senderFlows[senderJid].assistant = newAssistant;
+      
+      const newThread = await createThread();
+      senderFlows[senderJid].thread = newThread;
+      
+      console.log('xxx jobSys', newAssistant, newThread.id);
+
+      const { gptResponse } = await genChat(
+        payload,
+        Number(senderPhone), 
+        null,
+        senderFlows[senderJid].thread.id, 
+        senderFlows[senderJid].assistant.id
+      );
+
       await sock.sendMessage(senderJid, {
         text: gptResponse,
       });
       await delay(2_000);
 
-      senderFlows[senderJid] = {
-        flow: 'jobCode',
-        state: 'init',
-      }
+      // borrar los datos pasados, y crear nuevo thread ...
+      
+      senderFlows[senderJid].flow = 'jobTaskCode';
+      senderFlows[senderJid].state = 'init';
+      
+      // console.log('jobSys thread.id | assistant.id: ', senderFlows[senderJid].thread.id, senderFlows[senderJid].assistant.id);
       senderFlows[senderJid].source = 'jobSys end';
-      console.log(mHistory[senderJid]);
+      // console.log(mHistory[senderJid]);
     }
-
+    
     async function jobTask2(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode', senderJid: string) {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
@@ -666,7 +780,7 @@ async function connectToWhatsApp() {
 
     // Debo manejar un caso default, y un caso si X número le escribe. (checkbox-mandar 1° mensaje en UI).
     if(!respondedToMessages.has(senderJid) &&
-    senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net` &&
+    authPhones.some(item => item.phone === senderPhone) &&
     senderFlows[senderJid].flow === 'default' &&
     senderFlows[senderJid].state === 'init'
     ) {
@@ -675,21 +789,25 @@ async function connectToWhatsApp() {
       
       // console.log('default() after /stop')
 
-
       respondedToMessages.add(senderJid);
       // Esta respondiendo doble?, por qué volvió a enviarlo?
-
-
-      if(!chainHistory[senderJid]) {
-        await initCHistory([
-          {role: 'system', content: "The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."},
-          {role: 'system', content: defaultPrompt().content as string}
-        ], senderJid)
-      }
+      
+      // if(!chainHistory[senderJid]) {
+      //   await initCHistory([
+      //     {role: 'system', content: "The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."},
+      //     {role: 'system', content: defaultPrompt().content as string}
+      //   ], senderJid)
+      // }
 
       // Actualizar flujo acá.
       if (!mHistory[senderJid]) {
         mHistory[senderJid] = [defaultPrompt(), firstMessage()];
+        const myAssistant = await createAssistant(defaultPrompt().content as string, 'default')
+        senderFlows[senderJid].assistant = myAssistant;
+        // senderFlows[senderJid].assistant = {
+        //   id: 'asst_F5hljdLdf5GLzqj1pNfVEdFW' //
+        // };
+        senderFlows[senderJid].thread = await createThread();
       }
       mHistory[senderJid].push({role: 'user', content: messageUser as string});
       // console.log(mHistory, mHistory[senderJid].length);
@@ -705,18 +823,26 @@ async function connectToWhatsApp() {
         senderFlows[senderJid].state = 'generating';
         senderFlows[senderJid].source = 'generating default'
         console.log('default() state is generating');
-        let {gptResponse, chain } = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT), chainHistory[senderJid]);
-        // console.log({ gptResponse, memory: await chain.loadMemoryVariables({}) });
-        chainHistory[senderJid] = chain;
+        let response = await genChat(
+          payload,
+          Number(MVP_RECLUIMENT_CLIENT), 
+          null,
+          senderFlows[senderJid].thread.id,
+          senderFlows[senderJid].assistant.id
+        );
+        // console.log({ gptResponse, memory: await chain.loadMemoryVariables({})});
+        // chainHistory[senderJid] = chain;
+        console.log('response', response);
+        let { gptResponse } = response;
 
-        if (gptResponse.includes("/done")) {
+        if (gptResponse.includes("#DONE#")) {
           // Creo que esto no lo guarda ... :think
-          const regex = new RegExp(`\\/done.*`);
+          const regex = new RegExp(`#DONE#.*`);
           gptResponse = gptResponse.replace(regex, "");
           if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
             text: gptResponse,
           });
-          await delay(2_000)
+          await delay(2_000);
           mHistory[senderJid].push({role: 'assistant', content: gptResponse});
           console.log(mHistory[senderJid]);
           senderFlows[senderJid].flow = 'done'
@@ -727,7 +853,7 @@ async function connectToWhatsApp() {
           if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
             text: gptResponse,
           });
-          await delay(2_000)
+          await delay(2_000);
           respondedToMessages.delete(senderJid);
           senderFlows[senderJid].state = 'init';
           senderFlows[senderJid].source = 'end default';

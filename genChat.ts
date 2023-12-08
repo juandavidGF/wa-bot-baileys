@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import isDomainAvailable from './utils/isDomainAvailable';
 import { ChatCompletionMessageParam } from 'openai/resources/chat';
 import clientPromise from './db/mongodb';
+import { delay } from './utils/delay';
 
 require('dotenv').config();
 
@@ -16,6 +17,8 @@ interface MessageDB {
 	message: string,
 	env: 'dev' | 'prod',
 	campaign?: string,
+	threadId?: string,
+	assistantId?: string,
 }
 
 type RequestPayload = {
@@ -33,24 +36,50 @@ type RequestPayloadChat = {
   messages: Message[];
 };
 
-export async function genChat(payload: any, phone: number, chain: any = null) {
+export async function genChat(
+	payload: any,
+	phone: number,
+	chain: null = null,
+	threadId: string | undefined = undefined,
+	assistantId: string | undefined = undefined) {
 	console.log('/gChat flag1');
-	let response: any = ''
+	let response: any = '';
 	switch (payload.chain) {
 		case "logoChain":
 			response = await getOneByOne(payload, phone);
 			break;
 		case "jobTaskPhone":
-			response = await generateN(payload.messages, phone, chain);
+			response = await generateN(
+				payload.messages, 
+				phone, 
+				chain, 
+				threadId, 
+				assistantId
+			);
 			break;
 		case "jobTaskCode":
-			response = await generate(payload.messages, phone, chain);
+			response = await generateN(
+				payload.messages, 
+				phone, 
+				chain, 
+				threadId, 
+				assistantId
+			);
 			break;
 		case "jobTaskSys":
-			response = await generate(payload.messages, phone);
+			response = await generate(
+				payload.messages, 
+				phone
+			);
 			break;
 		case "default":
-			response = await generate(payload.messages, phone, chain);
+			response = await generateN(
+				payload.messages, 
+				phone, 
+				chain, 
+				threadId, 
+				assistantId
+			);
 			break;
 		default:
 			throw new Error('chain not supported');
@@ -58,21 +87,79 @@ export async function genChat(payload: any, phone: number, chain: any = null) {
 
 	// const response = mockTextAssets()
   // getByFunctionCalling(payload)
-  return response
+  return response;
 }
 
-async function generateN(messages:  ChatCompletionMessageParam[], phone: number, chain: any = null) {
+async function createMessage(threadId: string | undefined, role: 'user' = 'user', message: string) {
+	if(!threadId) throw Error('createMessage genChat, thread got undefinated');
+	const threadMessages = await openai.beta.threads.messages.create(
+		threadId,
+		{ role: role, content: message }
+	);
+
+	return threadMessages;
+}
+
+async function generateN(
+	messages:  ChatCompletionMessageParam[], 
+	phone: number, 
+	chain: any = null,
+	threadId: string | undefined, 
+	assistantId: string | undefined
+) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
 	// console.log('getMVPRecluiment#messagess: ', messages);
-	console.log('/gC generate flag2');
+	console.log('/gCN generate flag2');
 	let lastMessage = messages[messages.length - 1]?.content as string;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
-	await saveConversation('user', lastMessage, phone);
+	await saveConversation('user', lastMessage, phone, threadId , assistantId);
 
 	try {
-		console.log('/gC before chain.call generate flag2', lastMessage);
+		console.log('/gCN before chain.call generate flag2', lastMessage);
+		// addMesage
+		const newMessage = await createMessage(threadId, 'user', lastMessage);
+		// console.log('newMessage')
+		// run
+		if(!threadId || !assistantId ) throw Error('createMessage genChat, threadId or assistantId got undefinated');
+		const run = await openai.beta.threads.runs.create(
+			threadId,
+			{ assistant_id: assistantId }
+		);
+		console.log('runId: ', run.id, run.status);
+		// retrieve
+
+		let runRetrieve: any;
+
+		do {
+			runRetrieve = await openai.beta.threads.runs.retrieve(
+				threadId,
+				run.id
+			);
+			console.log('runRetrieve.status: ', runRetrieve.status);
+			if(runRetrieve.status === 'failed') {
+				throw Error('runRetrieve failed');
+			}
+			await delay(500);
+		} while(runRetrieve.status !== 'completed');
+
+		const threadMessages = await openai.beta.threads.messages.list(
+			threadId
+		);
+
+		const messages = threadMessages.data.map(m => {
+			if(m.content[0].type === 'text') {
+				// console.log('m.content', m.content)
+				return {
+					role: m.role,
+					value: m.content[0].text.value
+				}
+			}
+		});
+		console.log('Assistant: ', messages[0]?.value)
+
+		let gptResponse = messages[0]?.value;
 		// let gptResponse = await getGPTNew();
-		let gptResponse =  await chain.predict({ input: lastMessage });
+		// let gptResponse =  await chain.predict({ input: lastMessage });
 		// console.log('/genChat gptResponse: ', gptResponse);
 		// const gptResponse = (await openai.chat.completions.create({
 		// 	messages: messages,
@@ -85,12 +172,11 @@ async function generateN(messages:  ChatCompletionMessageParam[], phone: number,
 		// error.code "context_length_exceeded" task de resumir. Y no parar proceso, solo decir err si alcaso.
 		// O utilizar otro modelo más grande.
 	
-		await saveConversation('assistant', gptResponse, phone);
-		return { gptResponse, chain };
+		await saveConversation('assistant', gptResponse, phone, threadId, assistantId);
+		return { gptResponse };
 	} catch (error: any) {
 		console.log('/genChat generate() error: ', error.message);
-		chain
-		generate(messages, phone, chain)
+		throw Error(error.message);
 	}
 }
 
@@ -105,12 +191,12 @@ async function generate(messages:  ChatCompletionMessageParam[], phone: number, 
 	try {
 		console.log('/gC before chain.call generate flag2', lastMessage);
 		// let gptResponse = await getGPTNew();
-		let gptResponse =  await chain.predict({ input: lastMessage });
+		// let gptResponse =  await chain.predict({ input: lastMessage });
 		// console.log('/genChat gptResponse: ', gptResponse);
-		// const gptResponse = (await openai.chat.completions.create({
-		// 	messages: messages,
-		// 	model: 'gpt-3.5-turbo',
-		// })).choices[0].message.content;
+		const gptResponse = (await openai.chat.completions.create({
+			messages: messages,
+			model: 'gpt-3.5-turbo',
+		})).choices[0].message.content;
 		if(gptResponse == null) {
 			throw Error('We didnt get a response getMVPRecluiment');
 		}
@@ -119,11 +205,9 @@ async function generate(messages:  ChatCompletionMessageParam[], phone: number, 
 		// O utilizar otro modelo más grande.
 	
 		await saveConversation('assistant', gptResponse, phone);
-		return { gptResponse, chain };
+		return { gptResponse };
 	} catch (error: any) {
 		console.log('/genChat generate() error: ', error.message);
-		chain
-		generate(messages, phone, chain)
 	}
 }
 
@@ -134,7 +218,12 @@ export async function getGPTNew() {
 	});
 }
 
-export async function saveConversation(role: 'user' | 'assistant' | 'system', message: string, phone: number) {
+export async function saveConversation(role: 'user' | 'assistant' | 'system', 
+	message: string, 
+	phone: number, 
+	threadId: string | undefined = undefined, 
+	assistantId: string | undefined = undefined
+) {
 	if (!process.env.MONGO_DB_CMP) {
 		throw new Error('Invalid environment variable: "MONGO_DB_CMP"');
 	}
@@ -148,8 +237,10 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system', me
 
 	const messageData: MessageDB = {
 		date: Date.now(),
-		role: role,
-		message: message,
+		role,
+		message,
+		assistantId,
+		threadId,
 		env: process.env.ENV_J4 as "dev" || "prod",
 	}
 	try {
