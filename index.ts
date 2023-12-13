@@ -32,13 +32,11 @@ import {
   SystemMessagePromptTemplate,
 } from "langchain/prompts";
 
-
 import OpenAI from "openai";
 
 require('dotenv').config();
 
 const openai = new OpenAI();
-
 
 import { BaseMemory, ConversationSummaryBufferMemory, ConversationSummaryMemory } from "langchain/memory";
 import { AIMessage } from "langchain/dist/schema";
@@ -116,6 +114,9 @@ type textAssets = {
 
 const authPhones: allowedPhones[] = [
   { phone: JUAND4BOT_NUMBER as string },
+  { phone: '4915157996351' },
+  { phone: '41788297711' },
+  { phone: '41791093602' },
 ]
 
 async function connectToWhatsApp() {
@@ -146,7 +147,7 @@ async function connectToWhatsApp() {
   // Debería acá llamar las task para llenar una variable con las de código también.
   // De modo que las de código las revise primero cuando recibe un mensaje,
     // Y según si tiene phone, las filtre y ejecute.
-  setTimeout(() => jobTasksPhone(tasksP), 3_000);
+  // setTimeout(() => jobTasksPhone(tasksP), 3_000);
 
   setInterval(async () => {
     const newTasks = await getTasks();
@@ -156,7 +157,7 @@ async function connectToWhatsApp() {
         activeCodes[version.code.name] = camp
       }
     });
-    jobTasksPhone(newTasks['phone']);
+    // jobTasksPhone(newTasks['phone']);
   }, interval);
 
   // Guardar cuando fue completado la task, luego puedo ver en que punto (como por ejemplo luego del #DONE#).
@@ -195,10 +196,10 @@ async function connectToWhatsApp() {
   }
 
   async function createAssistant(
-    instruction: string, 
+    instruction: string,
     name: string = "newAssistant", 
     campaign: Campaign | null = null, 
-    model: "gpt-4-1106-preview" | "gpt-3.5-turbo-1106" = "gpt-3.5-turbo-1106"
+    model: "gpt-4-1106-preview" | "gpt-3.5-turbo-1106" = "gpt-4-1106-preview"
   ) {
     // assistant exist?
     if(campaign?.assistant) {
@@ -384,7 +385,7 @@ async function connectToWhatsApp() {
     }
 
     async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
-      console.log('jobTaskCode')
+      console.log('jobTaskCode');
       // debo eliminar el responded para ese número, o más bien, activarlo para bloquearlo acá.
       // Debo actualizar o crear el senderFlow a este code ...
       // Luego de so debo ejecutar el prompt, y el firtsMessage -> Esto va a ser curioso.
@@ -402,13 +403,14 @@ async function connectToWhatsApp() {
         source: 'jobTaskCode',
       }
       console.log('jobTaskCode');
-      respondedToMessages.add(senderJid)
-
-      
+      respondedToMessages.add(senderJid);
 
       if(task.firstMessage) await sock.sendMessage(senderJid, {
         text: task.firstMessage,
       });
+      else {
+        task.prompt
+      }
 
       // En teoría acá debería reiniciar la historia.
       mHistory[senderJid] = []
@@ -559,12 +561,17 @@ async function connectToWhatsApp() {
     // Caso jobCodes
     if(senderFlows[senderJid].flow === 'jobTaskCode' &&
     senderFlows[senderJid].state === 'init'
-    ) jobTask('jobTaskCode', senderJid, senderFlows[senderJid].campaign);
+    ) {
+      console.log('if jobCodes');
+      jobTask('jobTaskCode', senderJid, senderFlows[senderJid].campaign);
+    }
 
     async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', senderJid: string, campaign?: Campaign) {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
       senderFlows[senderJid].source = 'jobTask';
+
+      console.log('jobTask', campaign?.versions[0].code);
 
       const task = campaign?.versions[0];
 
@@ -865,7 +872,6 @@ async function connectToWhatsApp() {
         // console.log(mHistory[senderJid]);
       }
     }
-    
     // if(messageUser === '/getMgs' &&
     // senderJid === `${JD_NUMBER}@s.whatsapp.net`
     // ) getMessage();

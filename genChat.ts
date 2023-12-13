@@ -155,7 +155,7 @@ async function generateN(
 				}
 			}
 		});
-		console.log('Assistant: ', messages[0]?.value)
+		console.log('Assistant: ', messages[0]?.value);
 
 		let gptResponse = messages[0]?.value;
 		// let gptResponse = await getGPTNew();
