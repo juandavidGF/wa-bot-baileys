@@ -143,7 +143,7 @@ async function generateN(
 
 		do {
 			try {
-				runRetrieve = await timeout(30_000,openai.beta.threads.runs.retrieve(
+				runRetrieve = await timeout(120_000,openai.beta.threads.runs.retrieve(
 					threadId,
 					run.id
 				));
