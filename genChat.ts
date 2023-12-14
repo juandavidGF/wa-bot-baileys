@@ -100,6 +100,16 @@ async function createMessage(threadId: string | undefined, role: 'user' = 'user'
 	return threadMessages;
 }
 
+function timeout(ms: number, promise: Promise<any>) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      reject(new Error("Timeout after " + ms + " ms")); // Lanza un error después del tiempo especificado
+    }, ms);
+
+    promise.then(resolve).catch(reject);
+  });
+}
+
 async function generateN(
 	messages:  ChatCompletionMessageParam[], 
 	phone: number, 
@@ -132,10 +142,15 @@ async function generateN(
 		let runRetrieve: any;
 
 		do {
-			runRetrieve = await openai.beta.threads.runs.retrieve(
-				threadId,
-				run.id
-			);
+			try {
+				runRetrieve = await timeout(30_000,openai.beta.threads.runs.retrieve(
+					threadId,
+					run.id
+				));
+			} catch (error:any) {
+				console.error("genChat runs.retrieve Error or timeout occurred:", error.message);
+				throw Error('genChat runs.retrieve Error or timeout occurred:');
+			}
 			console.log('runRetrieve.status: ', runRetrieve.status);
 			if(runRetrieve.status === 'failed') {
 				throw Error('runRetrieve failed');
