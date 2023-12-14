@@ -73,7 +73,7 @@ interface SenderFlowState {
   source?: string;
   campaign?: any;
   thread?: any;
-  assistant?: any;
+  assistantId?: any;
 }
 
 interface SenderFlows {
@@ -202,8 +202,8 @@ async function connectToWhatsApp() {
     model: "gpt-4-1106-preview" | "gpt-3.5-turbo-1106" = "gpt-4-1106-preview"
   ): Promise<string> {
     // assistant exist?
-    if(campaign?.assistant) {
-      return campaign.assistant;
+    if(campaign?.assistantId) {
+      return campaign.assistantId;
     }
     const myAssistant = await openai.beta.assistants.create({
       instructions: instruction,
@@ -265,8 +265,8 @@ async function connectToWhatsApp() {
           saveConversation('assistant', task.firstMessage as string, Number(task.phone));
           await updateTask(taskVs, Number(task.phone));
 
-          const myAssistant = await createAssistant(task.prompt, task.name, taskVs);
-          senderFlows[senderJidLocal].assistant = myAssistant;
+          const myAssistantId = await createAssistant(task.prompt, task.name, taskVs);
+          senderFlows[senderJidLocal].assistantId = myAssistantId;
 
           const thread = await createThread();
           senderFlows[senderJidLocal].thread = thread;
@@ -322,7 +322,7 @@ async function connectToWhatsApp() {
         state: 'init',
         source: '/stop userMessage',
         thread: undefined,
-        assistant: undefined
+        assistantId: undefined
       }
       delete mHistory[senderJid];
       chainHistory[senderJid] = null;
@@ -396,9 +396,9 @@ async function connectToWhatsApp() {
       if(!isValidPhone) return;
       
       if(codeKey === '/h2') {
-        campaign.assistant = 'asst_JjHw8XtHHFBRVv7hcSglmyGz';
+        campaign.assistantId = 'asst_JjHw8XtHHFBRVv7hcSglmyGz';
       }
-      console.log('jobTaskCode, ', codeKey, 'camp.a, ', campaign?.assistant);
+      console.log('jobTaskCode, ', codeKey, 'camp.a, ', campaign?.assistantId);
       senderFlows[senderJid] = {
         flow: 'jobTaskCode',
         state: 'generating',
@@ -430,10 +430,8 @@ async function connectToWhatsApp() {
       saveConversation('system', task.prompt as string, Number(task.phone));
       saveConversation('assistant', task.firstMessage as string, Number(task.phone));
       
-      const myAssistant = await createAssistant(task.prompt, task.name, campaign);
-      senderFlows[senderJid].assistant = myAssistant;
-
-      console.log('**** senderFlows[senderJid].assistant, ', senderFlows[senderJid].assistant);
+      const myAssistantId = await createAssistant(task.prompt, task.name, campaign);
+      senderFlows[senderJid].assistantId = myAssistantId;
       
       const thread = await createThread();
       senderFlows[senderJid].thread = thread;
@@ -596,15 +594,15 @@ async function connectToWhatsApp() {
       // senderFlows[senderJid].assistant = myAssistant;
       // senderFlows[senderJid].thread = await createThread();
       console.log('xxx jobTask senderFlows[senderJid]: ', senderFlows[senderJid]);
-      console.log('xxx JobTask thread.id .assistant.id');
-      console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistant);
+      console.log('xxx JobTask thread.id .assistantId');
+      console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistantId);
 
       let { gptResponse, chain } = await genChat(
         payload,
         Number(senderPhone), 
         null,
         senderFlows[senderJid].thread.id,
-        senderFlows[senderJid].assistant
+        senderFlows[senderJid].assistantId
       );
       chainHistory[senderJid] = chain;
       
@@ -709,20 +707,20 @@ async function connectToWhatsApp() {
         messages: mHistory[senderJid],
       };
 
-      const newAssistant = await createAssistant(gptResponseSys.gptResponse, 'newBot');
-      senderFlows[senderJid].assistant = newAssistant;
+      const newAssistantId = await createAssistant(gptResponseSys.gptResponse, 'newBot');
+      senderFlows[senderJid].assistantId = newAssistantId;
       
       const newThread = await createThread();
       senderFlows[senderJid].thread = newThread;
       
-      console.log('xxx jobSys', newAssistant, newThread.id);
+      console.log('xxx jobSys', newAssistantId, newThread.id);
 
       const { gptResponse } = await genChat(
         payload,
         Number(senderPhone), 
         null,
         senderFlows[senderJid].thread.id, 
-        senderFlows[senderJid].assistant.id
+        senderFlows[senderJid].assistantId
       );
 
       await sock.sendMessage(senderJid, {
@@ -814,8 +812,8 @@ async function connectToWhatsApp() {
       // Actualizar flujo acá.
       if (!mHistory[senderJid]) {
         mHistory[senderJid] = [defaultPrompt(), firstMessage()];
-        const myAssistant = await createAssistant(defaultPrompt().content as string, 'default')
-        senderFlows[senderJid].assistant = myAssistant;
+        const myAssistantId = await createAssistant(defaultPrompt().content as string, 'default')
+        senderFlows[senderJid].assistantId = myAssistantId;
         // senderFlows[senderJid].assistant = {
         //   id: 'asst_F5hljdLdf5GLzqj1pNfVEdFW' //
         // };
@@ -840,7 +838,7 @@ async function connectToWhatsApp() {
           Number(MVP_RECLUIMENT_CLIENT), 
           null,
           senderFlows[senderJid].thread.id,
-          senderFlows[senderJid].assistant.id
+          senderFlows[senderJid].assistantId
         );
         // console.log({ gptResponse, memory: await chain.loadMemoryVariables({})});
         // chainHistory[senderJid] = chain;

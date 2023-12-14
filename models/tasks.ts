@@ -55,7 +55,7 @@ import { ObjectId } from 'mongodb';
 export interface Campaign {
 	_id?: ObjectId,
 	uuid?: string,
-	assistant?: string,
+	assistantId?: string,
   email: string,
 	versions: Version[]
 }
