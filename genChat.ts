@@ -104,12 +104,13 @@ async function generateN(
 	messages:  ChatCompletionMessageParam[], 
 	phone: number, 
 	chain: any = null,
-	threadId: string | undefined, 
+	threadId: string | undefined,
 	assistantId: string | undefined
 ) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
 	// console.log('getMVPRecluiment#messagess: ', messages);
 	console.log('/gCN generate flag2');
+	// if running return or queu
 	let lastMessage = messages[messages.length - 1]?.content as string;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone, threadId , assistantId);

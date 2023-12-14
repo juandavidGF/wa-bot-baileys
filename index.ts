@@ -597,14 +597,20 @@ async function connectToWhatsApp() {
       console.log('xxx JobTask thread.id .assistantId');
       console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistantId);
 
-      let { gptResponse, chain } = await genChat(
-        payload,
-        Number(senderPhone), 
-        null,
-        senderFlows[senderJid].thread.id,
-        senderFlows[senderJid].assistantId
-      );
-      chainHistory[senderJid] = chain;
+      let gptResponse: string;
+
+      try {
+        let response = await genChat(
+          payload,
+          Number(senderPhone), 
+          null,
+          senderFlows[senderJid].thread.id,
+          senderFlows[senderJid].assistantId
+        );
+        gptResponse = response.gptResponse
+      } catch (error) {
+        gptResponse = "err, please try again";
+      }
       
       // Si acá comienza con "/", entonces el nuevo flow va a tener esa palabra,
       // Tengo que extraer la palabra con /
@@ -835,7 +841,7 @@ async function connectToWhatsApp() {
         console.log('default() state is generating');
         let response = await genChat(
           payload,
-          Number(MVP_RECLUIMENT_CLIENT), 
+          Number(MVP_RECLUIMENT_CLIENT),
           null,
           senderFlows[senderJid].thread.id,
           senderFlows[senderJid].assistantId
