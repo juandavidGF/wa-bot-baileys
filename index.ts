@@ -392,10 +392,14 @@ async function connectToWhatsApp() {
       const task = campaign.versions[0];
       // if is allowed number?
       // const isValidPhone =  !!task && !!task?.phone && authPhones.some(item => Number(item.phone) == task.phone)
-      const isValidPhone = authPhones.some(item => item.phone === senderPhone)
+      const isValidPhone = authPhones.some(item => item.phone === senderPhone);
       console.log('isValidePhone', isValidPhone);
       if(!isValidPhone) return;
-
+      
+      if(codeKey === '/h2') {
+        campaign.assistant = 'asst_JjHw8XtHHFBRVv7hcSglmyGz';
+      }
+      console.log('jobTaskCode, ', codeKey, 'camp.a, ', campaign?.assistant);
       senderFlows[senderJid] = {
         flow: 'jobTaskCode',
         state: 'generating',
