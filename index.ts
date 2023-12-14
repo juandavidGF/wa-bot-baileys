@@ -385,7 +385,6 @@ async function connectToWhatsApp() {
     }
 
     async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
-      console.log('jobTaskCode');
       // debo eliminar el responded para ese número, o más bien, activarlo para bloquearlo acá.
       // Debo actualizar o crear el senderFlow a este code ...
       // Luego de so debo ejecutar el prompt, y el firtsMessage -> Esto va a ser curioso.
@@ -433,6 +432,8 @@ async function connectToWhatsApp() {
       
       const myAssistant = await createAssistant(task.prompt, task.name, campaign);
       senderFlows[senderJid].assistant = myAssistant;
+
+      console.log('**** senderFlows[senderJid].assistant, ', senderFlows[senderJid].assistant);
       
       const thread = await createThread();
       senderFlows[senderJid].thread = thread;
