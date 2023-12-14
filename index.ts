@@ -200,7 +200,7 @@ async function connectToWhatsApp() {
     name: string = "newAssistant", 
     campaign: Campaign | null = null, 
     model: "gpt-4-1106-preview" | "gpt-3.5-turbo-1106" = "gpt-4-1106-preview"
-  ) {
+  ): Promise<string> {
     // assistant exist?
     if(campaign?.assistant) {
       return campaign.assistant;
@@ -211,7 +211,7 @@ async function connectToWhatsApp() {
       model: model,
     });
 
-    return myAssistant;
+    return myAssistant.id;
   }
 
   async function createThread() {
@@ -596,14 +596,14 @@ async function connectToWhatsApp() {
       // senderFlows[senderJid].thread = await createThread();
       console.log('xxx jobTask senderFlows[senderJid]: ', senderFlows[senderJid]);
       console.log('xxx JobTask thread.id .assistant.id');
-      console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistant.id);
+      console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistant);
 
       let { gptResponse, chain } = await genChat(
         payload,
         Number(senderPhone), 
         null,
         senderFlows[senderJid].thread.id,
-        senderFlows[senderJid].assistant.id
+        senderFlows[senderJid].assistant
       );
       chainHistory[senderJid] = chain;
       
