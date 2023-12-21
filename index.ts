@@ -114,7 +114,7 @@ type textAssets = {
 
 const authPhones: allowedPhones[] = [
   { phone: JUAND4BOT_NUMBER as string },
-  { phone: '4915157996351' },
+  // { phone: '4915157996351' },
   // { phone: '41788297711' },
   { phone: '41791093602' },
 ]

@@ -111,8 +111,8 @@ function timeout(ms: number, promise: Promise<any>) {
 }
 
 async function generateN(
-	messages:  ChatCompletionMessageParam[], 
-	phone: number, 
+	messages:  ChatCompletionMessageParam[],
+	phone: number,
 	chain: any = null,
 	threadId: string | undefined,
 	assistantId: string | undefined
