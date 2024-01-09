@@ -398,6 +398,9 @@ async function connectToWhatsApp() {
       if(codeKey === '/h2') {
         campaign.assistantId = 'asst_JjHw8XtHHFBRVv7hcSglmyGz';
       }
+      if(codeKey === '/h3r') {
+        campaign.assistantId = 'asst_3sJqO4RxdbyJsJrik3r22MNv';
+      }
       console.log('jobTaskCode, ', codeKey, 'camp.a, ', campaign?.assistantId);
       senderFlows[senderJid] = {
         flow: 'jobTaskCode',
