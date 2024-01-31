@@ -50,7 +50,7 @@ export async function getTasks() {
       }
     });
     
-    console.log('/getTasks: ', campaigns);
+    // console.log('/getTasks: ', campaigns);
 
     return campaigns;
   } catch (error: any) {
