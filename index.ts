@@ -314,7 +314,7 @@ async function connectToWhatsApp() {
     
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
     
-    console.log(receivedMessage);
+    console.log('receivedMessage', senderJid, receivedMessage);
     console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
 
     //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
