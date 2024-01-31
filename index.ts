@@ -311,8 +311,10 @@ async function connectToWhatsApp() {
     const messageExtended = receivedMessage.message?.extendedTextMessage?.text
     const messageUser = !!messageConversation ? messageConversation : messageExtended;
 
+    
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
-
+    
+    console.log(receivedMessage);
     console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
 
     //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
@@ -464,6 +466,38 @@ async function connectToWhatsApp() {
       setTimeout(() => {
         if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
           text: "Describe your product, company or idea",
+        });
+        senderFlows[senderJid].state = 'rprompt';
+      }, 2_500);
+
+      setTimeout(() => {
+        respondedToMessages.delete(senderJid);
+      }, 3_500);
+    }
+
+    if(!respondedToMessages.has(senderJid) &&
+    senderFlows[senderJid].flow === '/brandx' &&
+    senderFlows[senderJid].state === 'rprompt') {
+
+    }
+
+    if(!respondedToMessages.has(senderJid) &&
+    messageUser === '/avatar' &&
+    senderFlows[senderJid].flow === 'default' &&
+    senderFlows[senderJid].state === 'init') {
+      console.log('/avatar default init');
+
+      senderFlows[senderJid].flow === '/avatar'
+      senderFlows[senderJid].state === 'generating'
+
+      sock.sendMessage(senderJid, {
+        text: "generating ...",
+      });
+
+
+      setTimeout(() => {
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: "Sube una foto de referencia de tu rostro",
         });
         senderFlows[senderJid].state = 'product';
       }, 2_500);
