@@ -601,10 +601,7 @@ async function connectToWhatsApp() {
     // Caso jobCodes
     if(senderFlows[senderJid].flow === 'jobTaskCode' &&
     senderFlows[senderJid].state === 'init'
-    ) {
-      console.log('if jobCodes');
-      jobTask('jobTaskCode', senderJid, senderFlows[senderJid].campaign);
-    }
+    ) jobTask('jobTaskCode', senderJid, senderFlows[senderJid].campaign);
 
     async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', senderJid: string, campaign?: Campaign) {
       console.log('jobTask ', flowTaskChain);
@@ -648,16 +645,6 @@ async function connectToWhatsApp() {
       } catch (error) {
         gptResponse = "err, please try again";
       }
-      
-      // Si acá comienza con "/", entonces el nuevo flow va a tener esa palabra,
-      // Tengo que extraer la palabra con /
-      // Y entonces se la asigno a flow, de modo que bueno, ese flow debe tener un prompt, o un job asociado,
-      // Entonces luego de /end, debe generar nuevo prompt, así que es un job que no tiene respuesta al usuario,
-      // Entonces debe haber un nuevo JobSys, que es solo para el sistema. Y esa respuesta es la la entrada del siguiente flow :)
-      // Y luego de que lo realiza, inicia un nuevo flow al que este asociado.
-      // Ese nuevo job asciado sería un JobTask, y entonces 
-      // Debo entonces tener un type (jobPhone, Code o Sys),
-      // Y según el que sea, debo entrar a el,
 
       console.log('jobTask() gptResponse: ', gptResponse, task?.nxCode, gptResponse.includes(task?.nxCode as string));
       
@@ -703,7 +690,10 @@ async function connectToWhatsApp() {
           respondedToMessages.delete(senderJid);
           senderFlows[senderJid].state = 'init';
         }
-      } else {
+      } else if(gptResponse.includes("/on")) {
+      }
+      else {
+        // Debería volver a invocar,
         console.log('jobTask() not includes');
         if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
           text: gptResponse,
