@@ -672,7 +672,12 @@ async function connectToWhatsApp() {
               console.log('Campaign:', campaign);
               // Acá se que existe un mensaje para activar un nuevo skill, tengo un history, Y se lo debo pasar a
               if(newCampaign.versions[0].type === 'jobSys') {
+                if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
+                  text: "==========",
+                });
+                await delay(500);
                 jobSys(skill, senderJid, newCampaign);
+
               } else {
                 // Lo que creo es que acá se va a repetir, porque llama a esta misma función, y agrega el messageUser
                 jobTask('jobChain', senderJid, campaign);
@@ -691,7 +696,7 @@ async function connectToWhatsApp() {
           senderFlows[senderJid].state = 'init';
         }
       } else if(gptResponse.includes("/on")) {
-        console.log(gptResponse);
+        console.log('xxxxxx gptR: ', gptResponse);
         if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
           text: gptResponse.replace("/on", ""),
         });
