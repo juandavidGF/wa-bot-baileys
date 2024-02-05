@@ -691,6 +691,14 @@ async function connectToWhatsApp() {
           senderFlows[senderJid].state = 'init';
         }
       } else if(gptResponse.includes("/on")) {
+        if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
+          text: gptResponse.replace("/on", ""),
+        });
+  
+        await delay(2_500);
+        respondedToMessages.delete(senderJid);
+        senderFlows[senderJid].state = 'init';
+        senderFlows[senderJid].source = 'jobTask not includes codes';
       }
       else {
         // Debería volver a invocar,
