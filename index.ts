@@ -691,6 +691,7 @@ async function connectToWhatsApp() {
           senderFlows[senderJid].state = 'init';
         }
       } else if(gptResponse.includes("/on")) {
+        console.log(gptResponse);
         if(typeof senderJid === 'string') await sock.sendMessage(senderJid, {
           text: gptResponse.replace("/on", ""),
         });
