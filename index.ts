@@ -112,11 +112,18 @@ type textAssets = {
   whyLogo: string | null
 }
 
+
+const DEFAULT_FLOW = false
+
+const SLAVA_PHONE: string = '41791093602'
+const HAROLD_PHONE: string = '573208666258'
+const JDIEGOHZ_PHONE: string = '573013847948'
+
 const authPhones: allowedPhones[] = [
   { phone: JUAND4BOT_NUMBER as string },
-  // { phone: '4915157996351' },
-  // { phone: '41788297711' },
-  { phone: '41791093602' },
+  { phone: SLAVA_PHONE },
+  { phone: HAROLD_PHONE },
+  { phone: JDIEGOHZ_PHONE }
 ]
 
 async function connectToWhatsApp() {
@@ -839,7 +846,8 @@ async function connectToWhatsApp() {
     if(!respondedToMessages.has(senderJid) &&
     authPhones.some(item => item.phone === senderPhone) &&
     senderFlows[senderJid].flow === 'default' &&
-    senderFlows[senderJid].state === 'init'
+    senderFlows[senderJid].state === 'init' &&
+    DEFAULT_FLOW
     ) {
 
       console.log('flag1 default()');
@@ -874,7 +882,9 @@ async function connectToWhatsApp() {
         messages: mHistory[senderJid],
       };
 
-      if(senderFlows[senderJid].state === 'init' && senderFlows[senderJid].flow === 'default') {
+      if(senderFlows[senderJid].state === 'init' 
+        && senderFlows[senderJid].flow === 'default'
+      ) {
         console.log('default() state is init');
         console.log('flag3');
         senderFlows[senderJid].state = 'generating';
