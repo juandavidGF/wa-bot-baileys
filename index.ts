@@ -322,9 +322,12 @@ async function connectToWhatsApp() {
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
     
     console.log('receivedMessage', senderJid, receivedMessage);
-    console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
+    // console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
 
-    if(senderPhone === OWNER_NUMBER) return;
+    if(senderPhone === OWNER_NUMBER) {
+      console.log('retuuuuuurn -> senderPhone === OWNER_NUMBER', senderPhone, OWNER_NUMBER);
+      return
+    };
 
     //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
     if(messageUser?.includes("/stop")) {
