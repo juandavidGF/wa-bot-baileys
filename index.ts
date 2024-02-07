@@ -321,7 +321,10 @@ async function connectToWhatsApp() {
     
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
     
-    console.log('receivedMessage', senderJid, receivedMessage);
+    if(senderPhone === JD_NUMBER) {
+      console.log('receivedMessage', senderPhone, JSON.stringify(receivedMessage));
+    }
+    
     // console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
 
     if(senderPhone === OWNER_NUMBER) {
