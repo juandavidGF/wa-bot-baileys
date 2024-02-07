@@ -351,23 +351,26 @@ async function connectToWhatsApp() {
 
     // if available !! <- guardar esa info en la DB y luego en alguna estructura, porque pueden ser muchos !!
     if (!senderFlows[senderJid]) {
+
+      const credits = await getCreditsPhone(senderPhone)
+
       console.log('!senderFlows[senderJid]');
       senderFlows[senderJid] = {
         flow: 'default',
         state: 'init',
         source: 'constructor()',
-        credits: await getCreditsPhone(senderPhone),
+        credits: credits
       }
     }
 
     async function getCreditsPhone(phone: string) {
-
+      console.log('flagA')
       const messages = await getMessage(phone);
+      console.log('flagB')
+      console.log('getCreditsPhone: ', messages, 'credits: ', messages?.credits);
+      console.log('flagC')
 
-      console.log('getCreditsPhone: ', messages, 'credits: ', messages?.credits)
-
-
-      return messages?.credits ?? 0;
+      return messages?.credits ?? undefined;
     }
 
     if(messageUser?.startsWith('/')) {
