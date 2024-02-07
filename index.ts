@@ -57,7 +57,7 @@ require('dotenv').config();
 
 const JUAND4BOT_NUMBER = process.env.JUAND4BOT_NUMBER;
 const JD_NUMBER = process.env.JD_NUMBER;
-const OWNER_NUMBER = JD_NUMBER;
+const OWNER_NUMBER = JUAND4BOT_NUMBER;
 const AUTH_BAILEYS = OWNER_NUMBER === JD_NUMBER ? 'baileys_auth_info_juanG' : 'baileys_auth_info_juand4bot';
 // const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
 const MVP_RECLUIMENT_CLIENT = JUAND4BOT_NUMBER;
@@ -120,7 +120,7 @@ const HAROLD_PHONE: string = '573208666258'
 const JDIEGOHZ_PHONE: string = '573013847948'
 
 const authPhones: allowedPhones[] = [
-  { phone: JUAND4BOT_NUMBER as string },
+  { phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
   { phone: SLAVA_PHONE },
   { phone: HAROLD_PHONE },
   { phone: JDIEGOHZ_PHONE }
@@ -323,6 +323,8 @@ async function connectToWhatsApp() {
     
     console.log('receivedMessage', senderJid, receivedMessage);
     console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
+
+    if(senderPhone === OWNER_NUMBER) return;
 
     //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
     if(messageUser?.includes("/stop")) {
