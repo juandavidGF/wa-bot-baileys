@@ -19,6 +19,7 @@ interface MessageDB {
 	campaign?: string,
 	threadId?: string,
 	assistantId?: string,
+	credits?: number,
 }
 
 type RequestPayload = {
@@ -41,7 +42,8 @@ export async function genChat(
 	phone: number,
 	chain: null = null,
 	threadId: string | undefined = undefined,
-	assistantId: string | undefined = undefined) {
+	assistantId: string | undefined = undefined
+) {
 	console.log('/gChat flag1');
 	let response: any = '';
 	switch (payload.chain) {
@@ -96,7 +98,7 @@ async function createMessage(threadId: string | undefined, role: 'user' = 'user'
 		threadId,
 		{ role: role, content: message }
 	);
-
+	
 	return threadMessages;
 }
 
@@ -119,6 +121,10 @@ async function generateN(
 ) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
 	// console.log('getMVPRecluiment#messagess: ', messages);
+
+	// if(firstMessageSession) {
+	// 	fetchDB and get credits.
+	// }
 	console.log('/gCN generate flag2');
 	// if running return or queu
 	let lastMessage = messages[messages.length - 1]?.content as string;
@@ -128,6 +134,7 @@ async function generateN(
 	try {
 		console.log('/gCN before chain.call generate flag2', lastMessage);
 		// addMesage
+		// if(lastMessage.credits)
 		const newMessage = await createMessage(threadId, 'user', lastMessage);
 		// console.log('newMessage')
 		// run

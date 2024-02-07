@@ -74,6 +74,7 @@ interface SenderFlowState {
   campaign?: any;
   thread?: any;
   assistantId?: any;
+  credits?: number;
 }
 
 interface SenderFlows {
@@ -355,33 +356,22 @@ async function connectToWhatsApp() {
         flow: 'default',
         state: 'init',
         source: 'constructor()',
+        credits: await getCreditsPhone(senderPhone),
       }
     }
 
-    // if(messageUser?.includes("/stop")) {
-    //   senderFlows[senderJid] = {
-    //     flow: '/wait',
-    //     state: 'init',
-    //     source: '/stop constructor()',
-    //   }
-    // } else if(senderFlows[senderJid].flow === '/wait') {
-    //   senderFlows[senderJid] = {
-    //     flow: 'default',
-    //     state: 'init',
-    //     source: '/wait constructor()',
-    //   }
-    //   respondedToMessages.delete(senderJid);
-    // }
+    async function getCreditsPhone(phone: string) {
 
-    // Acá debería manejar los comandos, según prioridades, estados ...
-    // Y creo que es hora de volver todo esto funciones para darle más orden :)
-    // const regex = /#([^#\s]+)#/g;
-    // const matches = messageUser?.match(regex);
-    // matches[0].replace(/#/g, "");
+      const messages = await getMessage(phone);
+
+      console.log('getCreditsPhone: ', messages, 'credits: ', messages?.credits)
+
+
+      return messages?.credits ?? 0;
+    }
+
     if(messageUser?.startsWith('/')) {
       console.log('messageUser startsWith /');
-      //* agregar si es /stop
-      // si existe ese flujo, debo comparar contra los flujos
       for (const codeKey in activeCodes) {
         if (activeCodes.hasOwnProperty(codeKey)) {
           if(messageUser === codeKey) {
@@ -389,9 +379,6 @@ async function connectToWhatsApp() {
             const campaign: Campaign = activeCodes[codeKey];
             console.log('Campaign:', campaign);
             jobTaskCode(codeKey, campaign, senderJid);
-            // Bueno esto quiere decir que tiene que iniciar esta task
-            // Y tiene guardado un prompt, y un firtsMessage, luego puede ser algo más avanzado, una serie de tareas
-            // Y en teoría las demás deberían estar asociadas a esas tasks, como brand ... :D
           }
         } else {
           console.log(`${messageUser} flow not supported`)
@@ -400,12 +387,7 @@ async function connectToWhatsApp() {
     }
 
     async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
-      // debo eliminar el responded para ese número, o más bien, activarlo para bloquearlo acá.
-      // Debo actualizar o crear el senderFlow a este code ...
-      // Luego de so debo ejecutar el prompt, y el firtsMessage -> Esto va a ser curioso.
       const task = campaign.versions[0];
-      // if is allowed number?
-      // const isValidPhone =  !!task && !!task?.phone && authPhones.some(item => Number(item.phone) == task.phone)
       const isValidPhone = authPhones.some(item => item.phone === senderPhone);
       console.log('isValidePhone', isValidPhone);
       if(!isValidPhone) return;
@@ -440,11 +422,6 @@ async function connectToWhatsApp() {
         {role: 'assistant', content: task.firstMessage as string}
       ];
       
-      // await initCHistory([
-      //   {role: 'system', content: task.prompt as string},
-      //   {role: 'assistant', content: task.firstMessage as string}
-      // ], senderJid)
-      
       saveConversation('system', task.prompt as string, Number(task.phone));
       saveConversation('assistant', task.firstMessage as string, Number(task.phone));
       
@@ -454,11 +431,6 @@ async function connectToWhatsApp() {
       const thread = await createThread();
       senderFlows[senderJid].thread = thread;
       
-      // Add first message.
-      // const messsage = await createMessage(thread.id, 'assistant', task.firstMessage as string);
-
-      //* Debería update según alguna politica?, número máximo ...
-      // await updateTask(taskVs, Number(task.phone));
       await delay(1_500);
       senderFlows[senderJid].state = 'init';
       respondedToMessages.delete(senderJid);
@@ -468,7 +440,6 @@ async function connectToWhatsApp() {
     messageUser === '/brandx' &&
     senderFlows[senderJid].flow === 'default' &&
     senderFlows[senderJid].state === 'init') {
-      // console.log(JSON.stringify(m, undefined, 2));
       console.log('/brandx default init');
 
       senderFlows[senderJid].flow === '/brandx'
@@ -545,7 +516,6 @@ async function connectToWhatsApp() {
           textAssets = await genChat(payload, Number(MVP_RECLUIMENT_CLIENT));
           console.log('index#textAssets (response)', textAssets)
         } catch (error) {
-          //Debo hacer que se genere error, y si eso pasa entonces, volverla a llamar máximo 3 veces ...
           console.log('error -> ')
           console.error(error)
           if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
@@ -787,8 +757,6 @@ async function connectToWhatsApp() {
         text: gptResponse,
       });
       await delay(2_000);
-
-      // borrar los datos pasados, y crear nuevo thread ...
       
       senderFlows[senderJid].flow = 'jobTaskCode';
       senderFlows[senderJid].state = 'init';
@@ -833,22 +801,7 @@ async function connectToWhatsApp() {
       mHistory[senderJid].push({role: 'assistant', content: gptResponse});
       console.log(mHistory[senderJid]);
     }
-
-    // if (senderJid === `${JD_NUMBER}@s.whatsapp.net`) {
-    //   console.log('reveived Message from: ', senderJid);
-    //   console.log(JSON.stringify(receivedMessage));
-    //   console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
-    // }
-    if (senderJid === `${MVP_RECLUIMENT_CLIENT}@s.whatsapp.net`) {
-      // console.log('!respondedToMessages.has(senderJid)', !respondedToMessages.has(senderJid));
-      // console.log(`senderFlows[${senderJid}]`, senderFlows[senderJid]);
-      // console.log('reveived Message from: ', senderJid);
-      // console.log(messageUser);
-      // console.log(JSON.stringify(receivedMessage));
-      // console.log('mgConv', typeof messageConversation, messageConversation, 'mgExt', typeof messageExtended, messageExtended, 'mUser: ', messageUser);
-    }
-
-    // Debo manejar un caso default, y un caso si X número le escribe. (checkbox-mandar 1° mensaje en UI).
+    
     if(!respondedToMessages.has(senderJid) &&
     authPhones.some(item => item.phone === senderPhone) &&
     senderFlows[senderJid].flow === 'default' &&
@@ -856,21 +809,9 @@ async function connectToWhatsApp() {
     DEFAULT_FLOW
     ) {
 
-      console.log('flag1 default()');
-      
-      // console.log('default() after /stop')
-
       respondedToMessages.add(senderJid);
       // Esta respondiendo doble?, por qué volvió a enviarlo?
       
-      // if(!chainHistory[senderJid]) {
-      //   await initCHistory([
-      //     {role: 'system', content: "The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."},
-      //     {role: 'system', content: defaultPrompt().content as string}
-      //   ], senderJid)
-      // }
-
-      // Actualizar flujo acá.
       if (!mHistory[senderJid]) {
         mHistory[senderJid] = [defaultPrompt(), firstMessage()];
         const myAssistantId = await createAssistant(defaultPrompt().content as string, 'default')
@@ -933,14 +874,9 @@ async function connectToWhatsApp() {
           console.log('default() end init');
           console.log('default state', senderFlows[senderJid]);
         }
-        console.log('default() after await');
-        // mHistory[senderJid].push({role: 'assistant', content: gptResponse});
-        // console.log(mHistory[senderJid]);
+        console.log('default() after await');   
       }
     }
-    // if(messageUser === '/getMgs' &&
-    // senderJid === `${JD_NUMBER}@s.whatsapp.net`
-    // ) getMessage();
   });
 }
 
