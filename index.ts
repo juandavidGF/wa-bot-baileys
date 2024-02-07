@@ -328,11 +328,7 @@ async function connectToWhatsApp() {
     // console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
 
 
-    if(receivedMessage.key.fromMe) {
-      // TODO cuando escriba debo agregar mensajes al asistente
-      // console.log('retuuuurn -> from Me', receivedMessage.key.fromMe);
-      return;
-    }
+    if(receivedMessage.key.fromMe && !messageUser?.includes("/stop")) return;
 
     //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
     if(messageUser?.includes("/stop")) {
