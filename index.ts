@@ -330,6 +330,7 @@ async function connectToWhatsApp() {
 
     if(receivedMessage.key.fromMe) {
       console.log('xxxx from Me')
+      return
     }
     
 
