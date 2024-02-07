@@ -330,7 +330,7 @@ async function connectToWhatsApp() {
 
     if(receivedMessage.key.fromMe) {
       // TODO cuando escriba debo agregar mensajes al asistente
-      console.log('retuuuurn -> from Me', receivedMessage.key.fromMe);
+      // console.log('retuuuurn -> from Me', receivedMessage.key.fromMe);
       return;
     }
 
