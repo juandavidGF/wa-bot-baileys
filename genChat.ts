@@ -37,6 +37,13 @@ type RequestPayloadChat = {
   messages: Message[];
 };
 
+
+type UpdateOperationType = {
+	$push: { chat: MessageDB };
+	$setOnInsert: { phone: number; credits?: number | undefined; };
+	$set?: { credits?: number }; // Marca $set y cred como opcionales
+};
+
 export async function genChat(
 	payload: any,
 	phone: number,
@@ -275,18 +282,31 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 		env: process.env.ENV_J4 as "dev" || "prod",
 		credits,
 	}
+
 	try {
+
+		let updateOperation: UpdateOperationType = {
+			$push: {
+					chat: messageData
+			},
+			$setOnInsert: {
+					phone, // Esto establece el campo 'phone' cuando se crea un nuevo documento
+				},
+			};
+			// credits, // Esto establece 'credits' solo en la inserción
+
+		if (credits) {
+			updateOperation.$set = {
+				...updateOperation.$set, // Esto es para asegurarnos de no sobrescribir otros $set que puedan existir
+				credits: credits
+			};
+		}
+
+
+
 		await collection.updateOne(
 			{ pohne: phone },
-			{
-				$push: {
-					chat: messageData
-				},
-				$setOnInsert: {
-					phone, // This sets the 'phone' field when a new document is created
-					credits,
-				},
-			},
+			updateOperation,
 			{ upsert: true}
 		)
 	} catch (error: any) {

@@ -354,7 +354,7 @@ async function connectToWhatsApp() {
 
       const credits = await getCreditsPhone(senderPhone)
       if(credits <= 0) return;
-      console.log('credits1: ', credits);
+      console.log('getCreditsPhone: ', credits);
 
       console.log('!senderFlows[senderJid]');
       senderFlows[senderJid] = {
@@ -371,7 +371,7 @@ async function connectToWhatsApp() {
       console.log('flagA')
       const messages = await getMessage(phone);
       console.log('flagB')
-      console.log('getCreditsPhone: ', messages, 'credits: ', messages?.credits);
+      console.log('getCreditsPhone: ', messages?.credits);
       console.log('flagC')
 
       return messages?.credits;
@@ -630,7 +630,7 @@ async function connectToWhatsApp() {
       try {
         let response = await genChat(
           payload,
-          Number(senderPhone), 
+          Number(senderPhone),
           null,
           senderFlows[senderJid].thread.id,
           senderFlows[senderJid].assistantId,
