@@ -31,6 +31,7 @@ interface Code {
 
 export interface allowedPhones {
 	phone: string;
+	credits?: number;
 	sent?: boolean;
 	date?: number;
 }

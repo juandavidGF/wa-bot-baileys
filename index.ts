@@ -123,8 +123,8 @@ const JDIEGOHZ_PHONE: string = '573013847948'
 const authPhones: allowedPhones[] = [
   { phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
   { phone: SLAVA_PHONE },
-  { phone: HAROLD_PHONE },
-  { phone: JDIEGOHZ_PHONE }
+  { phone: HAROLD_PHONE, credits: 20 },
+  { phone: JDIEGOHZ_PHONE, credits: 20 }
 ]
 
 async function connectToWhatsApp() {
@@ -353,14 +353,18 @@ async function connectToWhatsApp() {
     if (!senderFlows[senderJid]) {
 
       const credits = await getCreditsPhone(senderPhone)
+      if(credits <= 0) return;
+      console.log('credits1: ', credits);
 
       console.log('!senderFlows[senderJid]');
       senderFlows[senderJid] = {
         flow: 'default',
         state: 'init',
         source: 'constructor()',
-        credits: credits
+        credits: credits ?? 20,
       }
+      
+      console.log('sF[] cred', senderFlows[senderJid].credits);
     }
 
     async function getCreditsPhone(phone: string) {
@@ -370,7 +374,7 @@ async function connectToWhatsApp() {
       console.log('getCreditsPhone: ', messages, 'credits: ', messages?.credits);
       console.log('flagC')
 
-      return messages?.credits ?? undefined;
+      return messages?.credits;
     }
 
     if(messageUser?.startsWith('/')) {
@@ -402,15 +406,15 @@ async function connectToWhatsApp() {
         campaign.assistantId = 'asst_3sJqO4RxdbyJsJrik3r22MNv';
       }
       console.log('jobTaskCode, ', codeKey, 'camp.a, ', campaign?.assistantId);
-      senderFlows[senderJid] = {
-        flow: 'jobTaskCode',
-        state: 'generating',
-        campaign: campaign,
-        source: 'jobTaskCode',
-      }
+      senderFlows[senderJid].flow = 'jobTaskCode'
+      senderFlows[senderJid].state = 'generating'
+      senderFlows[senderJid].campaign = campaign
+      senderFlows[senderJid].source = 'jobTaskCode'
+      
       console.log('jobTaskCode');
       respondedToMessages.add(senderJid);
 
+      // TODO send related with the language the person talks, or the country id native languge. :think
       if(task.firstMessage) await sock.sendMessage(senderJid, {
         text: task.firstMessage,
       });
@@ -589,7 +593,11 @@ async function connectToWhatsApp() {
     senderFlows[senderJid].state === 'init'
     ) jobTask('jobTaskCode', senderJid, senderFlows[senderJid].campaign);
 
-    async function jobTask(flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', senderJid: string, campaign?: Campaign) {
+    async function jobTask(
+      flowTaskChain: 'jobTaskPhone' | 'jobTaskCode' | 'jobChain', 
+      senderJid: string, 
+      campaign?: Campaign
+    ) {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
       senderFlows[senderJid].source = 'jobTask';
@@ -625,9 +633,13 @@ async function connectToWhatsApp() {
           Number(senderPhone), 
           null,
           senderFlows[senderJid].thread.id,
-          senderFlows[senderJid].assistantId
+          senderFlows[senderJid].assistantId,
+          senderFlows[senderJid].credits,
         );
         gptResponse = response.gptResponse
+        if (senderFlows[senderJid].credits) {
+          (senderFlows[senderJid] as any).credits--;
+        }
       } catch (error) {
         gptResponse = "err, please try again";
       }

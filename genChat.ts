@@ -42,7 +42,8 @@ export async function genChat(
 	phone: number,
 	chain: null = null,
 	threadId: string | undefined = undefined,
-	assistantId: string | undefined = undefined
+	assistantId: string | undefined = undefined,
+	credits?: number
 ) {
 	console.log('/gChat flag1');
 	let response: any = '';
@@ -56,7 +57,8 @@ export async function genChat(
 				phone, 
 				chain, 
 				threadId, 
-				assistantId
+				assistantId,
+				credits
 			);
 			break;
 		case "jobTaskCode":
@@ -65,7 +67,8 @@ export async function genChat(
 				phone, 
 				chain, 
 				threadId, 
-				assistantId
+				assistantId,
+				credits
 			);
 			break;
 		case "jobTaskSys":
@@ -80,7 +83,8 @@ export async function genChat(
 				phone, 
 				chain, 
 				threadId, 
-				assistantId
+				assistantId,
+				credits
 			);
 			break;
 		default:
@@ -117,7 +121,8 @@ async function generateN(
 	phone: number,
 	chain: any = null,
 	threadId: string | undefined,
-	assistantId: string | undefined
+	assistantId: string | undefined,
+	credits: number | undefined = undefined,
 ) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
 	// console.log('getMVPRecluiment#messagess: ', messages);
@@ -195,7 +200,7 @@ async function generateN(
 		// error.code "context_length_exceeded" task de resumir. Y no parar proceso, solo decir err si alcaso.
 		// O utilizar otro modelo más grande.
 	
-		await saveConversation('assistant', gptResponse, phone, threadId, assistantId);
+		await saveConversation('assistant', gptResponse, phone, threadId, assistantId, credits);
 		return { gptResponse };
 	} catch (error: any) {
 		console.log('/genChat generate() error: ', error.message);
@@ -245,7 +250,8 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 	message: string, 
 	phone: number, 
 	threadId: string | undefined = undefined, 
-	assistantId: string | undefined = undefined
+	assistantId: string | undefined = undefined,
+	credits?: number,
 ) {
 	if (!process.env.MONGO_DB_CMP) {
 		throw new Error('Invalid environment variable: "MONGO_DB_CMP"');
@@ -257,6 +263,8 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 	const mongoClient = await clientPromise;
 	const db = mongoClient.db(process.env.MONGO_DB_CMP);
 	const collection = db.collection(process.env.MONGO_COLLECTION_CAI);
+	
+	if(credits) --credits;
 
 	const messageData: MessageDB = {
 		date: Date.now(),
@@ -265,6 +273,7 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 		assistantId,
 		threadId,
 		env: process.env.ENV_J4 as "dev" || "prod",
+		credits,
 	}
 	try {
 		await collection.updateOne(
@@ -274,7 +283,8 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 					chat: messageData
 				},
 				$setOnInsert: {
-					phone: phone // This sets the 'phone' field when a new document is created
+					phone, // This sets the 'phone' field when a new document is created
+					credits,
 				},
 			},
 			{ upsert: true}
