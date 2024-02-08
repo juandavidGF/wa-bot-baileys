@@ -20,14 +20,12 @@ const getMessages = async (phone: undefined | string = undefined) => {
     const db = mongoClient.db(process.env.MONGO_DB_CMP);
     const collection = db.collection(process.env.MONGO_COLLECTION_CAI);
  
-    console.log('flag1')
+    console.log('getMgs1', phone)
     const messages = phone
-      ? await collection.find({ phone: phone}).toArray() 
+      ? await collection.find({ phone: Number(phone)}).toArray()
       : await collection.find({}).toArray();
-  
-    console.log('flag2')
 
-    console.log('messages: ', phone, messages[0]);
+    console.log('getMgs2 -> messages: ', phone, messages[0]);
     return messages[0];
   } catch (error) {
     console.error(error)

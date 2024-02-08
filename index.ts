@@ -10,7 +10,7 @@ import { defaultPrompt, firstMessage } from "./lib/Prompts";
 
 import { genChat, saveConversation } from './genChat';
 import getLogo from './getLogo';
-import getMessage from './db/getMessages';
+import getMessages from './db/getMessages';
 import saveGenerations from './db/saveGenerations';
 import { DesighBrief } from "./models/logoapp";
 import { ChatCompletionMessageParam } from "openai/resources/chat";
@@ -123,8 +123,8 @@ const JDIEGOHZ_PHONE: string = '573013847948'
 const authPhones: allowedPhones[] = [
   { phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
   { phone: SLAVA_PHONE },
-  { phone: HAROLD_PHONE, credits: 20 },
-  { phone: JDIEGOHZ_PHONE, credits: 20 }
+  { phone: HAROLD_PHONE },
+  { phone: JDIEGOHZ_PHONE }
 ]
 
 async function connectToWhatsApp() {
@@ -318,20 +318,19 @@ async function connectToWhatsApp() {
     const messageConversation = receivedMessage.message?.conversation
     const messageExtended = receivedMessage.message?.extendedTextMessage?.text
     const messageUser = !!messageConversation ? messageConversation : messageExtended;
-
     
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
     
     if(authPhones.some(item => item.phone === senderPhone)) {
       console.log('receivedMessage', senderPhone, messageUser);
+    } else {
+      return;
     }
     
-    // console.log('messages.upsert: ', senderJid, senderPhone, senderFlows[senderJid], messageUser);
+    if(receivedMessage.key.fromMe && 
+      !messageUser?.includes("/stop")
+    ) return;
 
-
-    if(receivedMessage.key.fromMe && !messageUser?.includes("/stop")) return;
-
-    //* esto debería ser para usuarios registrados, para otros no quiero, o para ciertos grupos no quiero.
     if(messageUser?.includes("/stop")) {
       senderFlows[senderJid] = {
         flow: 'default',
@@ -344,16 +343,21 @@ async function connectToWhatsApp() {
       chainHistory[senderJid] = null;
       respondedToMessages.delete(senderJid);
 
-      //* Debería aca borrar el historial?
       console.log('upsert /stop');
       return;
     }
-
-    // if available !! <- guardar esa info en la DB y luego en alguna estructura, porque pueden ser muchos !!
+    
     if (!senderFlows[senderJid]) {
-
-      const credits = await getCreditsPhone(senderPhone)
-      if(credits <= 0) return;
+      const credits = await getCreditsPhone(senderPhone);
+      if(credits <= 0) {
+        // send message debe recargar los créditos
+        await sock.sendMessage(senderJid, {
+          text: "Te has quedado sin créditos, debes cargar más para poder continuar con la conversación",
+        });
+        await delay(1_500);
+        return
+      };
+      
       console.log('getCreditsPhone: ', credits);
 
       console.log('!senderFlows[senderJid]');
@@ -361,7 +365,7 @@ async function connectToWhatsApp() {
         flow: 'default',
         state: 'init',
         source: 'constructor()',
-        credits: credits ?? 20,
+        credits: credits,
       }
       
       console.log('sF[] cred', senderFlows[senderJid].credits);
@@ -369,12 +373,12 @@ async function connectToWhatsApp() {
 
     async function getCreditsPhone(phone: string) {
       console.log('flagA')
-      const messages = await getMessage(phone);
-      console.log('flagB')
+      const messages = await getMessages(phone);
+      console.log('flagB', messages);
       console.log('getCreditsPhone: ', messages?.credits);
       console.log('flagC')
 
-      return messages?.credits;
+      return messages?.credits ?? 20;
     }
 
     if(messageUser?.startsWith('/')) {
@@ -577,12 +581,6 @@ async function connectToWhatsApp() {
       }, 2_500)
     }
 
-    // Caso de continuar con la interacción de los jobs
-      // Había pensado en senderFlow, y senderState, así tengo cuál es el /skill y cuál es el estado :)
-      // En /brandx tengo luego de /brandx -> product como senderFlow
-      // En otros códigos, tengo init, pero creo que debería ser generating, y poner init al inicio.
-
-
     // Caso phoneJob
     if(senderFlows[senderJid].flow === 'jobTaskPhone' &&
     senderFlows[senderJid].state === 'init'
@@ -639,6 +637,14 @@ async function connectToWhatsApp() {
         gptResponse = response.gptResponse
         if (senderFlows[senderJid].credits) {
           (senderFlows[senderJid] as any).credits--;
+          if((senderFlows[senderJid] as any).credits <= 0) {
+            // send message debe recargar los créditos
+            await sock.sendMessage(senderJid, {
+              text: "Te has quedado sin créditos, debes cargar más para poder continuar con la conversación",
+            });
+            await delay(1_500);
+            return
+          };
         }
       } catch (error) {
         gptResponse = "err, please try again";
