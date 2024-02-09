@@ -36,7 +36,9 @@ import OpenAI from "openai";
 
 require('dotenv').config();
 
-const openai = new OpenAI();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 import { BaseMemory, ConversationSummaryBufferMemory, ConversationSummaryMemory } from "langchain/memory";
 import { AIMessage } from "langchain/dist/schema";
@@ -112,7 +114,6 @@ type textAssets = {
   logoPrompt: string | null,
   whyLogo: string | null
 }
-
 
 const DEFAULT_FLOW = false
 
@@ -437,9 +438,11 @@ async function connectToWhatsApp() {
       saveConversation('assistant', task.firstMessage as string, Number(task.phone));
       
       const myAssistantId = await createAssistant(task.prompt, task.name, campaign);
+      console.log('myAssistantId: ', myAssistantId);
       senderFlows[senderJid].assistantId = myAssistantId;
       
       const thread = await createThread();
+      console.log('thread: ', thread);
       senderFlows[senderJid].thread = thread;
       
       await delay(1_500);
@@ -599,11 +602,11 @@ async function connectToWhatsApp() {
       console.log('jobTask ', flowTaskChain);
       senderFlows[senderJid].state = 'generating';
       senderFlows[senderJid].source = 'jobTask';
-
+      
       console.log('jobTask', campaign?.versions[0].code);
 
       const task = campaign?.versions[0];
-
+      
       mHistory[senderJid].push({role: 'user', content: messageUser as string});
 
       let payload: RequestPayloadChat = {

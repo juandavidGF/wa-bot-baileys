@@ -147,15 +147,17 @@ async function generateN(
 		console.log('/gCN before chain.call generate flag2', lastMessage);
 		// addMesage
 		// if(lastMessage.credits)
+		console.log('gC tId', threadId);
 		const newMessage = await createMessage(threadId, 'user', lastMessage);
 		// console.log('newMessage')
 		// run
+		console.log('genChat 1 -> ', newMessage);
 		if(!threadId || !assistantId ) throw Error('createMessage genChat, threadId or assistantId got undefinated');
 		const run = await openai.beta.threads.runs.create(
 			threadId,
 			{ assistant_id: assistantId }
 		);
-		console.log('runId: ', run.id, run.status);
+		console.log('genChst 2, runId: ', run.id, run.status);
 		// retrieve
 
 		let runRetrieve: any;
