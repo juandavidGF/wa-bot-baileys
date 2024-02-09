@@ -114,7 +114,7 @@ type textAssets = {
 }
 
 
-const DEFAULT_FLOW = false
+const DEFAULT_FLOW = true
 
 const SLAVA_PHONE: string = '41791093602'
 const HAROLD_PHONE: string = '573208666258'
@@ -243,7 +243,9 @@ async function connectToWhatsApp() {
         const task = taskVs.versions[0]
         // Acá debo ver cuáles son los únicos que estan habilitados.
         // Revisar lógica, una es enviar a los números definidos en la campaña?, y luego a cierta cantidad por vez para evitar?.
-        if(!!task && !!task?.phone && authPhones.some(item => Number(item.phone) == task.phone)) {
+        if(!!task && !!task?.phone 
+          // && authPhones.some(item => Number(item.phone) == task.phone)
+        ) {
           console.log('onjobTask for..of', task);
           const firstTask = task;
           const senderJidLocal = `${task?.phone}@s.whatsapp.net`;
@@ -321,11 +323,11 @@ async function connectToWhatsApp() {
     
     if (typeof senderJid !== 'string') throw Error('on.message typeof senderJid !== "string"');
     
-    if(authPhones.some(item => item.phone === senderPhone)) {
+    // if(authPhones.some(item => item.phone === senderPhone)) {
       console.log('receivedMessage', senderPhone, messageUser);
-    } else {
-      return;
-    }
+    // } else {
+    //   return;
+    // }
     
     if(receivedMessage.key.fromMe && 
       !messageUser?.includes("/stop")
@@ -399,7 +401,8 @@ async function connectToWhatsApp() {
 
     async function jobTaskCode(codeKey: string, campaign: Campaign, senderJid: string) {
       const task = campaign.versions[0];
-      const isValidPhone = authPhones.some(item => item.phone === senderPhone);
+      // const isValidPhone = authPhones.some(item => item.phone === senderPhone);
+      const isValidPhone = true;
       console.log('isValidePhone', isValidPhone);
       if(!isValidPhone) return;
       
@@ -824,7 +827,7 @@ async function connectToWhatsApp() {
     }
     
     if(!respondedToMessages.has(senderJid) &&
-    authPhones.some(item => item.phone === senderPhone) &&
+    // authPhones.some(item => item.phone === senderPhone) &&
     senderFlows[senderJid].flow === 'default' &&
     senderFlows[senderJid].state === 'init' &&
     DEFAULT_FLOW
