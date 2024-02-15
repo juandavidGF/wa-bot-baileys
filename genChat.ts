@@ -52,7 +52,6 @@ export async function genChat(
 	assistantId: string | undefined = undefined,
 	credits?: number
 ) {
-	console.log('/gChat flag1');
 	let response: any = '';
 	switch (payload.chain) {
 		case "logoChain":
@@ -131,40 +130,23 @@ async function generateN(
 	assistantId: string | undefined,
 	credits: number | undefined = undefined,
 ) {
-	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
-	// console.log('getMVPRecluiment#messagess: ', messages);
-
-	// if(firstMessageSession) {
-	// 	fetchDB and get credits.
-	// }
-	console.log('/gCN generate flag2');
-	// if running return or queu
 	let lastMessage = messages[messages.length - 1]?.content as string;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone, threadId , assistantId);
 
 	try {
-		console.log('/gCN before chain.call generate flag2', lastMessage);
-		// addMesage
-		// if(lastMessage.credits)
-		console.log('gC tId', threadId);
 		const newMessage = await createMessage(threadId, 'user', lastMessage);
-		// console.log('newMessage')
-		// run
-		console.log('genChat 1 -> ', newMessage);
 		if(!threadId || !assistantId ) throw Error('createMessage genChat, threadId or assistantId got undefinated');
 		const run = await openai.beta.threads.runs.create(
 			threadId,
 			{ assistant_id: assistantId }
 		);
-		console.log('genChst 2, runId: ', run.id, run.status);
-		// retrieve
 
 		let runRetrieve: any;
 
 		do {
 			try {
-				runRetrieve = await timeout(120_000,openai.beta.threads.runs.retrieve(
+				runRetrieve = await timeout(120_000, openai.beta.threads.runs.retrieve(
 					threadId,
 					run.id
 				));
@@ -172,7 +154,6 @@ async function generateN(
 				console.error("genChat runs.retrieve Error or timeout occurred:", error.message);
 				throw Error('genChat runs.retrieve Error or timeout occurred:');
 			}
-			console.log('runRetrieve.status: ', runRetrieve.status);
 			if(runRetrieve.status === 'failed') {
 				throw Error('runRetrieve failed');
 			}
@@ -185,29 +166,17 @@ async function generateN(
 
 		const messages = threadMessages.data.map(m => {
 			if(m.content[0].type === 'text') {
-				// console.log('m.content', m.content)
 				return {
 					role: m.role,
 					value: m.content[0].text.value
 				}
 			}
 		});
-		console.log('Assistant: ', messages[0]?.value);
 
 		let gptResponse = messages[0]?.value;
-		// let gptResponse = await getGPTNew();
-		// let gptResponse =  await chain.predict({ input: lastMessage });
-		// console.log('/genChat gptResponse: ', gptResponse);
-		// const gptResponse = (await openai.chat.completions.create({
-		// 	messages: messages,
-		// 	model: 'gpt-3.5-turbo',
-		// })).choices[0].message.content;
 		if(gptResponse == null) {
 			throw Error('We didnt get a response getMVPRecluiment');
 		}
-	
-		// error.code "context_length_exceeded" task de resumir. Y no parar proceso, solo decir err si alcaso.
-		// O utilizar otro modelo más grande.
 	
 		await saveConversation('assistant', gptResponse, phone, threadId, assistantId, credits);
 		return { gptResponse };
@@ -219,8 +188,6 @@ async function generateN(
 
 async function generate(messages:  ChatCompletionMessageParam[], phone: number, chain: any = null) {
 	// if(payload.userInput !== 'string') throw Error('getChat userInput not string' + ' ' + typeof payload.userInput);
-	// console.log('getMVPRecluiment#messagess: ', messages);
-	console.log('/gC generate flag2');
 	let lastMessage = messages[messages.length - 1]?.content as string;
 	if(!lastMessage) throw Error('err last Message, !LastMesssage');
 	await saveConversation('user', lastMessage, phone);
@@ -272,8 +239,6 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 	const mongoClient = await clientPromise;
 	const db = mongoClient.db(process.env.MONGO_DB_CMP);
 	const collection = db.collection(process.env.MONGO_COLLECTION_CAI);
-	
-	if(credits) --credits;
 
 	const messageData: MessageDB = {
 		date: Date.now(),
@@ -289,22 +254,19 @@ export async function saveConversation(role: 'user' | 'assistant' | 'system',
 
 		let updateOperation: UpdateOperationType = {
 			$push: {
-					chat: messageData
+				chat: messageData
 			},
 			$setOnInsert: {
-					phone, // Esto establece el campo 'phone' cuando se crea un nuevo documento
-				},
-			};
-			// credits, // Esto establece 'credits' solo en la inserción
+				phone,
+			},
+		};
 
 		if (credits) {
 			updateOperation.$set = {
-				...updateOperation.$set, // Esto es para asegurarnos de no sobrescribir otros $set que puedan existir
+				...updateOperation.$set,
 				credits: credits
 			};
 		}
-
-
 
 		await collection.updateOne(
 			{ pohne: phone },
@@ -478,12 +440,8 @@ async function getByFunctionCalling({chain, prompt}: RequestPayload) {
 			functions: functions,
 			function_call: "auto"
 		});
-
-    // console.log('response.choices', response.choices)
 	
 		let responseMessage = response.choices[0].message;
-	
-		// console.log('responseMessage: ', responseMessage);
 	
 		if (responseMessage?.function_call) {
 			let function_name = responseMessage.function_call.name;
@@ -507,10 +465,7 @@ async function getByFunctionCalling({chain, prompt}: RequestPayload) {
 				default:
 					throw new Error(`Function not implemented: ${function_name}`);
 			}
-	
-			// console.log('genChat#functionResponse: ', functionResponse);
-
-      // si no tiene todos los párametros error
+			
       if(Object.values(functionResponse).some(value => value === undefined)) {
         throw new Error(`undefindated values: ${function_name}`);
       }

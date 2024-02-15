@@ -350,7 +350,7 @@ async function connectToWhatsApp() {
     
     if (!senderFlows[senderJid]) {
       const credits = await getCreditsPhone(senderPhone);
-      if(credits <= 0) {
+      if(credits && credits <= 0) {
         // send message debe recargar los créditos
         await sock.sendMessage(senderJid, {
           text: "Te has quedado sin créditos, debes cargar más para poder continuar con la conversación",
@@ -358,8 +358,6 @@ async function connectToWhatsApp() {
         await delay(1_500);
         return
       };
-      
-      console.log('getCreditsPhone: ', credits);
 
       console.log('!senderFlows[senderJid]');
       senderFlows[senderJid] = {
@@ -373,11 +371,8 @@ async function connectToWhatsApp() {
     }
 
     async function getCreditsPhone(phone: string) {
-      console.log('flagA')
       const messages = await getMessages(phone);
-      console.log('flagB', messages);
       console.log('getCreditsPhone: ', messages?.credits);
-      console.log('flagC')
 
       return messages?.credits ?? 20;
     }
@@ -614,14 +609,6 @@ async function connectToWhatsApp() {
         messages: mHistory[senderJid],
       };
       
-      // create thread
-      // create message
-      // run
-      // retrieve
-
-      // const myAssistant = await createAssistant(defaultPrompt().content as string, 'default')
-      // senderFlows[senderJid].assistant = myAssistant;
-      // senderFlows[senderJid].thread = await createThread();
       console.log('xxx jobTask senderFlows[senderJid]: ', senderFlows[senderJid]);
       console.log('xxx JobTask thread.id .assistantId');
       console.log(senderFlows[senderJid].thread.id, senderFlows[senderJid].assistantId);
@@ -629,15 +616,7 @@ async function connectToWhatsApp() {
       let gptResponse: string;
 
       try {
-        let response = await genChat(
-          payload,
-          Number(senderPhone),
-          null,
-          senderFlows[senderJid].thread.id,
-          senderFlows[senderJid].assistantId,
-          senderFlows[senderJid].credits,
-        );
-        gptResponse = response.gptResponse
+        console.log('credits jobTask A -> ', senderFlows[senderJid].credits)
         if (senderFlows[senderJid].credits) {
           (senderFlows[senderJid] as any).credits--;
           if((senderFlows[senderJid] as any).credits <= 0) {
@@ -649,6 +628,16 @@ async function connectToWhatsApp() {
             return
           };
         }
+        let response = await genChat(
+          payload,
+          Number(senderPhone),
+          null,
+          senderFlows[senderJid].thread.id,
+          senderFlows[senderJid].assistantId,
+          senderFlows[senderJid].credits,
+        );
+        console.log('credits jobTask B -> ', senderFlows[senderJid].credits)
+        gptResponse = response.gptResponse
       } catch (error) {
         gptResponse = "err, please try again";
       }
