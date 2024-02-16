@@ -120,12 +120,14 @@ const DEFAULT_FLOW = false
 const SLAVA_PHONE: string = '41791093602'
 const HAROLD_PHONE: string = '573208666258'
 const JDIEGOHZ_PHONE: string = '573013847948'
+const REYFUENTES: string = '573175769047'
 
 const authPhones: allowedPhones[] = [
   { phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
   { phone: SLAVA_PHONE },
   { phone: HAROLD_PHONE },
-  { phone: JDIEGOHZ_PHONE }
+  { phone: JDIEGOHZ_PHONE },
+  { phone: REYFUENTES }
 ]
 
 async function connectToWhatsApp() {
