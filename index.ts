@@ -32,6 +32,8 @@ import {
   SystemMessagePromptTemplate,
 } from "langchain/prompts";
 
+import getAuthPhones from './db/authPhones'
+
 import OpenAI from "openai";
 
 require('dotenv').config();
@@ -117,15 +119,20 @@ type textAssets = {
 
 const DEFAULT_FLOW = false
 
-const authPhones: allowedPhones[] = [
+const oldAuthPhones = [
   { name: 'OWNER', phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
   { name: 'SLAVA', phone: '41791093602' },
   { name: 'HAROLD', phone: '573208666258' },
   { name: 'JDIEGOHZ',phone: '573013847948' },
-  { name: 'REYFUENTES', phone: '573175769047' }
+  { name: 'REYFUENTES', phone: '573175769047' },
+  { name: 'MAURICIO_RAMIREZ', phone: '573112489756' }
 ]
 
 async function connectToWhatsApp() {
+
+  let authPhones: allowedPhones[] = await getAuthPhones() as  allowedPhones[];
+  authPhones.push({ name: 'OWNER', phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string });
+
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_BAILEYS);
   logger.level = 'trace';
   
@@ -136,7 +143,7 @@ async function connectToWhatsApp() {
   
   sock.ev.on("creds.update", saveCreds);
 
-  const interval = 3*60*1_000 //10m
+  const interval = 3*60*1_000 //3m
 
   const tasks = await getTasks();
   const tasksP = tasks['phone'];
@@ -165,6 +172,11 @@ async function connectToWhatsApp() {
     });
     // jobTasksPhone(newTasks['phone']);
   }, interval);
+
+  setInterval(async () => {
+    authPhones = await getAuthPhones() as allowedPhones[];
+    authPhones.push({ name: 'OWNER', phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string });
+  }, 20*60*1_000);
 
   // Guardar cuando fue completado la task, luego puedo ver en que punto (como por ejemplo luego del #DONE#).
   // No mandó el #Done#, así que debo revisar que pasó, y como mejorarlo.
