@@ -10,6 +10,7 @@ import { defaultPrompt, firstMessage } from "./lib/Prompts";
 
 import { genChat, saveConversation } from './genChat';
 import getLogo from './getLogo';
+import genSticker from './getSticker'
 import getMessages from './db/getMessages';
 import saveGenerations from './db/saveGenerations';
 import { DesighBrief } from "./models/logoapp";
@@ -22,7 +23,6 @@ import { Campaign, Version, allowedPhones } from "./models/tasks";
 
 import { LLMChain } from "langchain/chains";
 
-// import { OpenAI } from "langchain/llms/openai";
 import { ChatOpenAI } from "langchain/chat_models/openai";
 import { ConversationChain } from "langchain/chains";
 import {
@@ -65,9 +65,9 @@ const OWNER_NUMBER = JUAND4BOT_NUMBER;
 const AUTH_BAILEYS = OWNER_NUMBER === JD_NUMBER ? 'baileys_auth_info_juanG' : 'baileys_auth_info_juand4bot';
 // const MVP_RECLUIMENT_CLIENT = process.env.MVP_RECLUIMENT_CLIENT;
 const MVP_RECLUIMENT_CLIENT = JUAND4BOT_NUMBER;
-const respondedToMessages = new Set();
 const BASE_GEN = process.env.BASE_GEN;
 
+const respondedToMessages = new Set();
 
 // Quizá también debería agregar una para la app en la que esta, así le doy una prioridad.
 interface SenderFlowState {
@@ -119,17 +119,16 @@ type textAssets = {
 
 const DEFAULT_FLOW = false
 
-const oldAuthPhones = [
-  { name: 'OWNER', phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
-  { name: 'SLAVA', phone: '41791093602' },
-  { name: 'HAROLD', phone: '573208666258' },
-  { name: 'JDIEGOHZ',phone: '573013847948' },
-  { name: 'REYFUENTES', phone: '573175769047' },
-  { name: 'MAURICIO_RAMIREZ', phone: '573112489756' }
-]
+// const oldAuthPhones = [
+//   { name: 'OWNER', phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string },
+//   { name: 'SLAVA', phone: '41791093602' },
+//   { name: 'HAROLD', phone: '573208666258' },
+//   { name: 'JDIEGOHZ',phone: '573013847948' },
+//   { name: 'REYFUENTES', phone: '573175769047' },
+//   { name: 'MAURICIO_RAMIREZ', phone: '573112489756' }
+// ]
 
 async function connectToWhatsApp() {
-
   let authPhones: allowedPhones[] = await getAuthPhones() as  allowedPhones[];
   authPhones.push({ name: 'OWNER', phone: OWNER_NUMBER === JD_NUMBER ? JUAND4BOT_NUMBER as string : JD_NUMBER as string });
 
@@ -188,7 +187,6 @@ async function connectToWhatsApp() {
       llm: new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 }),
       maxTokenLimit: 10,
     });
-
 
     const sysPrompt = prompts.map((p: any) => {
       if(p.role === 'system') return SystemMessagePromptTemplate.fromTemplate(p.content);
@@ -289,8 +287,6 @@ async function connectToWhatsApp() {
           const thread = await createThread();
           senderFlows[senderJidLocal].thread = thread;
 
-          // const messsage = await createMessage(thread.id, 'assistant', task.firstMessage as string);
-
           await delay(1_500);
           senderFlows[senderJidLocal].state = 'init';
           respondedToMessages.delete(senderJidLocal);
@@ -368,7 +364,6 @@ async function connectToWhatsApp() {
         return
       };
 
-      console.log('!senderFlows[senderJid]');
       senderFlows[senderJid] = {
         flow: 'default',
         state: 'init',
@@ -482,6 +477,75 @@ async function connectToWhatsApp() {
     senderFlows[senderJid].state === 'rprompt') {
 
     }
+
+    if(!respondedToMessages.has(senderJid) &&
+    messageUser === '/sticker' &&
+    senderFlows[senderJid].flow === 'default' &&
+    senderFlows[senderJid].state === 'init') {
+      console.log('/sticker default init');
+
+      senderFlows[senderJid].flow = '/sticker'
+      senderFlows[senderJid].state = 'generating'
+
+      respondedToMessages.add(senderJid);
+
+      setTimeout(() => {
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: "Describe el sticker que quieres crear",
+        });
+        senderFlows[senderJid].state = 'generate';
+        // senderFlows[senderJid].flow === '/sticker'
+      }, 2_500);
+
+      setTimeout(() => {
+        respondedToMessages.delete(senderJid);
+        console.log('delete rTM(senderJid)', senderFlows[senderJid]);
+      }, 2_500);
+
+    }
+
+    if(!respondedToMessages.has(senderJid) &&
+    senderFlows[senderJid].flow === '/sticker' &&
+    senderFlows[senderJid].state === 'generate') {
+      console.log('/sticker generate');
+      await sock.sendMessage(senderJid, {
+        text: "generando ...",
+      });
+
+      senderFlows[senderJid].state === 'generating'
+
+      let sticker: Array<string>;
+
+      try {
+        if(typeof messageUser != "string") throw Error ("messageUser isn't string");
+        const textAssets = await genSticker(messageUser) as Array<string>;
+        sticker = textAssets;
+        // console.log('index#textAssets (response)', textAssets)
+      } catch (error) {
+        console.log('error -> ')
+        console.error(error)
+        if(typeof senderJid === 'string') sock.sendMessage(senderJid, {
+          text: "error",
+        });
+        return;
+      }
+
+      //.
+      for (const s of sticker) {
+        console.log(s)
+        await sock.sendMessage(senderJid, {
+          image: {
+            url: s
+          }
+        })
+      }
+
+      await delay(1_500);
+      senderFlows[senderJid].state = 'init';
+      senderFlows[senderJid].flow = 'default';
+      respondedToMessages.delete(senderJid);
+    }
+    
 
     if(!respondedToMessages.has(senderJid) &&
     messageUser === '/avatar' &&
